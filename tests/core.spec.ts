@@ -112,6 +112,16 @@ describe('renderSvg', () => {
     expect(svg).toContain('&lt;img')
   })
 
+  it('wraps long card text and grows the card instead of truncating', () => {
+    const note = '每人先接受机器人主持的访谈，再接受人类主持的访谈（交叉设计）全程录音转写后逐轮编码'
+    const svg = renderInfographic({ infographic: 'cards', items: [{ label: '参与者', value: '15', note }, { label: 'b', value: '2' }] })
+    expect(svg).not.toContain('…')
+    const heights = [...svg.matchAll(/<rect class="ig-card" [^>]*height="([\d.]+)"/g)].map(m => Number(m[1]))
+    expect(heights).toHaveLength(2)
+    expect(heights[0]).toBeGreaterThan(104)
+    expect(heights[1]).toBe(heights[0])
+  })
+
   it('scopes every css rule to the instance prefix', () => {
     const svg = renderInfographic({ infographic: 'cards', items: [{ label: 'a', value: '1', color: 'teal' }] }, { idPrefix: 'scope-1' })
     const css = /<style>(.*?)<\/style>/s.exec(svg)?.[1] ?? ''
