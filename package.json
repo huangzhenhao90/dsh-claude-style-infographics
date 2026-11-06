@@ -27,7 +27,6 @@
   "files": [
     "lib",
     "dsh",
-    "skill",
     "examples",
     "cordis.patch.yml",
     "README.md",

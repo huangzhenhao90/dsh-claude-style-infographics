@@ -1,8 +1,11 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { detectTheme, findInfographicBlocks, installFenceChannel, isPlausibleSurface, type Channel } from '../src/client/index.ts'
+import { STYLE_STORAGE_KEY, detectTheme, findInfographicBlocks, installFenceChannel, isPlausibleSurface, type Channel } from '../src/client/index.ts'
+import { normalizeSpec, renderSvg } from '../src/core/index.ts'
+import type { StyleName } from '../src/core/palettes.ts'
 
 const BAR = '{"infographic":"bar","title":"T","categories":["a","b"],"series":[{"name":"s","data":[1,2]}]}'
+const BCG_BAR = BAR.replace('"title":"T"', '"title":"T","style":"bcg"')
 
 function block(label: string, body: string, className = 'md-code-block'): string {
   return `<div class="${className}"><div data-code-block-banner><span>${label}</span></div><pre><code></code></pre></div>`.replace('<code></code>', `<code>${body.replace(/&/g, '&amp;').replace(/</g, '&lt;')}</code>`)
@@ -12,17 +15,55 @@ function row(inner: string, streaming = false): string {
   return `<div data-chat-flow-kind="assistant-step"${streaming ? ' data-streaming' : ''}>${inner}</div>`
 }
 
+/** Palette custom properties of a rendered svg's own stylesheet — style-agnostic probe. */
+function fills(css: string): string[] {
+  return [...css.matchAll(/--ig-fill:(#[0-9A-Fa-f]{6})/g)].map(match => match[1] as string)
+}
+
+function mountedFills(host: Element): string[] {
+  return fills(host.querySelector('svg')?.querySelector('style')?.textContent ?? '')
+}
+
+/** Same render the channel performs, used as an oracle for the palette actually in force. */
+function coreFills(body: string, style: StyleName): string[] {
+  const normalized = normalizeSpec(JSON.parse(body))
+  if (!normalized.ok) throw new Error(normalized.error)
+  const html = renderSvg({ ...normalized.spec, style }, { idPrefix: 'ig-1', style }).svg
+  return fills(/<style>([\s\S]*?)<\/style>/.exec(html)?.[1] ?? '')
+}
+
+function buttonNamed(name: string): HTMLButtonElement | undefined {
+  return [...document.querySelectorAll<HTMLButtonElement>('.dsh-ig-bar button')].find(button => button.textContent === name)
+}
+
+/** The vitest jsdom env exposes Node's webstorage global (no methods here), so tests inject their own. */
+class MemoryStorage {
+  private data = new Map<string, string>()
+  get length(): number { return this.data.size }
+  clear(): void { this.data.clear() }
+  getItem(key: string): string | null { return this.data.get(key) ?? null }
+  key(index: number): string | null { return [...this.data.keys()][index] ?? null }
+  removeItem(key: string): void { this.data.delete(key) }
+  setItem(key: string, value: string): void { this.data.set(key, value) }
+}
+
+const asStorage = (store: MemoryStorage): Storage => store as unknown as Storage
+
 let channel: Channel | undefined
+let store: MemoryStorage
 const wait = (ms: number): Promise<void> => new Promise(resolve => setTimeout(resolve, ms))
 
 beforeEach(() => {
   document.body.innerHTML = ''
   document.body.removeAttribute('data-ds-dark-theme')
+  store = new MemoryStorage()
 })
 
 afterEach(() => {
   channel?.dispose()
   channel = undefined
+  vi.unstubAllGlobals()
+  Reflect.deleteProperty(navigator, 'clipboard')
 })
 
 describe('discovery', () => {
@@ -76,7 +117,7 @@ describe('channel', () => {
     expect(host?.nextElementSibling).toBe(document.querySelector('.md-code-block'))
     expect(document.body.textContent).toContain('before')
     expect(document.body.textContent).toContain('after')
-    expect([...host?.querySelectorAll('.dsh-ig-bar button') ?? []].map(button => button.textContent)).toEqual(['Copy SVG', 'Download SVG', 'Download PNG', 'Source'])
+    expect([...host?.querySelectorAll('.dsh-ig-bar button') ?? []].map(button => button.textContent)).toEqual(['Copy PNG', 'Download PNG', 'Copy SVG', 'Download SVG', 'Source'])
   })
 
   it('renders progressively while streaming, without a toolbar, then settles', () => {
@@ -92,7 +133,7 @@ describe('channel', () => {
     channel.scan()
     host = document.querySelector('[data-infographic-host]') as HTMLElement
     expect(host.dataset.state).toBe('settled')
-    expect(host.querySelectorAll('.dsh-ig-bar button')).toHaveLength(4)
+    expect(host.querySelectorAll('.dsh-ig-bar button')).toHaveLength(5)
     expect(document.querySelectorAll('[data-infographic-host]')).toHaveLength(1)
   })
 
@@ -202,6 +243,119 @@ describe('channel', () => {
     expect(document.querySelector('[data-infographic-host]')).toBeNull()
     expect(document.getElementById('dsh-infographic-style')).toBeNull()
     expect((document.querySelector('.md-code-block') as HTMLElement).style.display).not.toBe('none')
+  })
+})
+
+describe('style switcher', () => {
+  it('gives each style a distinct palette (core integration)', () => {
+    const claude = coreFills(BAR, 'claude')
+    expect(claude.length).toBeGreaterThan(0)
+    for (const style of ['mckinsey', 'bcg', 'economist'] as const) expect(coreFills(BAR, style)).not.toEqual(claude)
+  })
+
+  it('uses the persisted pick as the default for images that name no style', () => {
+    store.setItem(STYLE_STORAGE_KEY, 'economist')
+    document.body.innerHTML = row(block('infographic', BAR))
+    channel = installFenceChannel({ locale: 'en', storage: asStorage(store) })
+    const host = document.querySelector('[data-infographic-host]') as HTMLElement
+    expect(host.dataset.style).toBe('economist')
+    expect(mountedFills(host)).toEqual(coreFills(BAR, 'economist'))
+  })
+
+  it('ignores a junk persisted value', () => {
+    store.setItem(STYLE_STORAGE_KEY, 'nordic')
+    document.body.innerHTML = row(block('infographic', BAR))
+    channel = installFenceChannel({ locale: 'en', storage: asStorage(store) })
+    expect((document.querySelector('[data-infographic-host]') as HTMLElement).dataset.style).toBe('claude')
+  })
+
+  it('lets the style written into the spec win over the persisted default', () => {
+    store.setItem(STYLE_STORAGE_KEY, 'economist')
+    document.body.innerHTML = row(block('infographic', BCG_BAR))
+    channel = installFenceChannel({ locale: 'en', storage: asStorage(store) })
+    const host = document.querySelector('[data-infographic-host]') as HTMLElement
+    expect(host.dataset.style).toBe('bcg')
+    expect(mountedFills(host)).toEqual(coreFills(BCG_BAR, 'bcg'))
+  })
+
+  it('repaints every mounted image on an explicit pick, syncs the dropdowns and persists it', () => {
+    document.body.innerHTML = row(block('infographic', BCG_BAR) + block('infographic', BAR.replace('"T"', '"U"')))
+    channel = installFenceChannel({ locale: 'en', storage: asStorage(store) })
+    const hosts = () => [...document.querySelectorAll<HTMLElement>('[data-infographic-host]')]
+    expect(hosts().map(host => host.dataset.style)).toEqual(['bcg', 'claude'])
+    const before = hosts().map(host => host.querySelector('svg')?.outerHTML ?? '')
+
+    const select = document.querySelector<HTMLSelectElement>('select.dsh-ig-style') as HTMLSelectElement
+    expect([...select.options].map(option => option.value)).toEqual(['claude', 'mckinsey', 'bcg', 'economist'])
+    expect([...select.options].map(option => option.textContent)).toEqual(['Claude (default)', 'McKinsey', 'BCG', 'Economist'])
+    select.value = 'mckinsey'
+    select.dispatchEvent(new Event('change'))
+
+    expect(hosts().map(host => host.dataset.style)).toEqual(['mckinsey', 'mckinsey'])
+    expect(hosts().map(host => host.querySelector('svg')?.outerHTML ?? '')).not.toEqual(before)
+    expect(mountedFills(hosts()[0] as HTMLElement)).toEqual(coreFills(BCG_BAR, 'mckinsey'))
+    expect(store.getItem(STYLE_STORAGE_KEY)).toBe('mckinsey')
+    expect([...document.querySelectorAll<HTMLSelectElement>('select.dsh-ig-style')].map(element => element.value)).toEqual(['mckinsey', 'mckinsey'])
+  })
+
+  it('still switches when persistence is unavailable', () => {
+    document.body.innerHTML = row(block('infographic', BAR))
+    channel = installFenceChannel({ locale: 'en', storage: null })
+    const select = document.querySelector<HTMLSelectElement>('select.dsh-ig-style') as HTMLSelectElement
+    select.value = 'economist'
+    select.dispatchEvent(new Event('change'))
+    expect((document.querySelector('[data-infographic-host]') as HTMLElement).dataset.style).toBe('economist')
+  })
+
+  it('keeps the explicit pick for images mounted later in the same page load', async () => {
+    document.body.innerHTML = row(block('infographic', BAR))
+    channel = installFenceChannel({ locale: 'en', sweepMs: 20, storage: asStorage(store) })
+    const select = document.querySelector<HTMLSelectElement>('select.dsh-ig-style') as HTMLSelectElement
+    select.value = 'bcg'
+    select.dispatchEvent(new Event('change'))
+    document.body.insertAdjacentHTML('beforeend', row(block('infographic', BAR.replace('"T"', '"V"'))))
+    await wait(120)
+    const hosts = [...document.querySelectorAll<HTMLElement>('[data-infographic-host]')]
+    expect(hosts).toHaveLength(2)
+    expect(hosts.map(host => host.dataset.style)).toEqual(['bcg', 'bcg'])
+  })
+})
+
+describe('copy png', () => {
+  it('writes an image/png clipboard item built from the pending rasterisation', async () => {
+    document.body.innerHTML = row(block('infographic', BAR))
+    class FakeClipboardItem {
+      constructor(readonly payload: Record<string, unknown>) {}
+    }
+    const items: FakeClipboardItem[] = []
+    vi.stubGlobal('ClipboardItem', FakeClipboardItem)
+    const write = vi.fn(async (data: unknown[]) => {
+      items.push(...(data as FakeClipboardItem[]))
+    })
+    Object.defineProperty(navigator, 'clipboard', { value: { write }, configurable: true })
+    channel = installFenceChannel({ locale: 'en' })
+    const copy = buttonNamed('Copy PNG')
+    copy?.click()
+    await wait(10)
+    expect(write).toHaveBeenCalledTimes(1)
+    expect(items).toHaveLength(1)
+    expect(Object.keys(items[0]?.payload ?? {})).toEqual(['image/png'])
+    // the item holds the *pending* rasterisation promise, the shape Safari requires
+    expect(items[0]?.payload['image/png']).toBeInstanceOf(Promise)
+    expect(copy?.textContent).toBe('Copied')
+  })
+
+  it('flashes a failure (and logs it) when the context cannot put images on the clipboard', async () => {
+    document.body.innerHTML = row(block('infographic', BAR))
+    const logs: string[] = []
+    channel = installFenceChannel({ locale: 'en', log: message => logs.push(message) })
+    const copy = buttonNamed('Copy PNG')
+    copy?.click()
+    await wait(10)
+    expect(copy?.textContent).toBe('Failed')
+    expect(logs.join('\n')).toMatch(/clipboard/i)
+    await wait(1250)
+    expect(copy?.textContent).toBe('Copy PNG')
   })
 })
 

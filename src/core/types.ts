@@ -1,3 +1,5 @@
+import type { StyleName } from './palettes.ts'
+
 export const RAMPS = ['purple', 'teal', 'coral', 'pink', 'gray', 'blue', 'green', 'amber', 'red'] as const
 export type Ramp = (typeof RAMPS)[number]
 
@@ -8,6 +10,8 @@ export interface BaseSpec {
   title?: string
   subtitle?: string
   note?: string
+  /** Visual style preset. Omitted → the viewer's default (initially `claude`). */
+  style?: StyleName
 }
 
 export interface FlowNode {
@@ -126,6 +130,8 @@ export interface RenderOptions {
   idPrefix?: string
   /** `auto` follows the `data-theme` attribute / OS; `light` and `dark` bake a single theme (for export). */
   theme?: Theme
+  /** Colour system. Defaults to `claude`; overrides a spec's own `style` when both are present. */
+  style?: StyleName
   /** Standalone file: adds the XML prolog and a fixed pixel size. */
   standalone?: boolean
 }

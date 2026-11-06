@@ -1,5 +1,7 @@
 export { RAMPS, KINDS } from './types.ts'
 export type * from './types.ts'
+export { STYLES, PALETTES, DEFAULT_STYLE, isStyle } from './palettes.ts'
+export type { StyleName, StylePalette, Neutrals } from './palettes.ts'
 export { parseLoose } from './loose-json.ts'
 export { normalizeSpec, LIMITS } from './normalize.ts'
 export { readFence, looksLikeInfographic } from './fence.ts'

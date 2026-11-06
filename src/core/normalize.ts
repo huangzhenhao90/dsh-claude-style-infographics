@@ -1,4 +1,5 @@
-import { DEFAULT_CYCLE, isRamp } from './theme.ts'
+import { DEFAULT_STYLE, PALETTES, STYLES, isStyle, type StyleName } from './palettes.ts'
+import { isRamp } from './theme.ts'
 import {
   KINDS,
   type BarSpec,
@@ -75,20 +76,41 @@ function list(value: unknown, max: number, label: string, warnings: string[]): u
   return value.slice(0, max)
 }
 
-function base(source: Obj): { title?: string; subtitle?: string; note?: string } {
-  const result: { title?: string; subtitle?: string; note?: string } = {}
+/** The style a spec asks for, without validating it — used to pick the auto-colour order. */
+function styleOf(source: Obj): StyleName {
+  const raw = pick(source, 'style', 'palette')
+  return isStyle(raw) ? raw : DEFAULT_STYLE
+}
+
+/** Ramp names are resolved to real colours at render time, so each style cycles its own order. */
+function cycleOf(source: Obj): readonly Ramp[] {
+  return PALETTES[styleOf(source)].cycle
+}
+
+function base(source: Obj, warnings: string[]): { title?: string; subtitle?: string; note?: string; style?: StyleName } {
+  const result: { title?: string; subtitle?: string; note?: string; style?: StyleName } = {}
   const title = text(pick(source, 'title', 'name'), 80)
   const subtitle = text(pick(source, 'subtitle', 'description'), 120)
   const note = text(pick(source, 'note', 'caption', 'source'), 160)
   if (title !== undefined) result.title = title
   if (subtitle !== undefined) result.subtitle = subtitle
   if (note !== undefined) result.note = note
+  const rawStyle = pick(source, 'style', 'palette')
+  if (rawStyle !== undefined && rawStyle !== null) {
+    if (isStyle(rawStyle)) result.style = rawStyle
+    else warnings.push(`style: "${String(rawStyle)}" is not one of ${STYLES.join(', ')} — using ${DEFAULT_STYLE}`)
+  }
   return result
 }
 
 export interface NormalizeOptions {
   /** The spec may still be arriving: do not invent defaults for keys that have not streamed in. */
   streaming?: boolean
+  /**
+   * The style to draw in, when the caller has already resolved it — e.g. the viewer picked one.
+   * It decides the auto-colour order, so it has to be known here rather than at render time.
+   */
+  style?: StyleName
 }
 
 function flow(source: Obj, warnings: string[], streaming: boolean): FlowSpec {
@@ -158,7 +180,7 @@ function flow(source: Obj, warnings: string[], streaming: boolean): FlowSpec {
   }
   return {
     infographic: 'flow',
-    ...base(source),
+    ...base(source, warnings),
     direction: source.direction === 'right' || source.direction === 'horizontal' || source.direction === 'LR' ? 'right' : 'down',
     nodes,
     edges,
@@ -166,6 +188,7 @@ function flow(source: Obj, warnings: string[], streaming: boolean): FlowSpec {
 }
 
 function seriesList(source: Obj, warnings: string[]): { categories: string[]; series: Series[] } {
+  const cycle = cycleOf(source)
   let categories: string[] = []
   const rawCategories = pick(source, 'categories', 'labels', 'x')
   if (Array.isArray(rawCategories)) {
@@ -180,7 +203,7 @@ function seriesList(source: Obj, warnings: string[]): { categories: string[]; se
       series.push({
         name: text(pick(entry, 'name', 'label', 'title'), 40) ?? `Series ${index + 1}`,
         data: values.slice(0, LIMITS.categories).map(num),
-        color: ramp(pick(entry, 'color', 'tone', 'ramp'), DEFAULT_CYCLE[index % DEFAULT_CYCLE.length] as Ramp),
+        color: ramp(pick(entry, 'color', 'tone', 'ramp'), cycle[index % cycle.length] as Ramp),
       })
     }
   } else if (Array.isArray(source.data)) {
@@ -213,7 +236,7 @@ function seriesList(source: Obj, warnings: string[]): { categories: string[]; se
 function bar(source: Obj, warnings: string[]): BarSpec {
   const spec: BarSpec = {
     infographic: 'bar',
-    ...base(source),
+    ...base(source, warnings),
     ...seriesList(source, warnings),
     horizontal: source.horizontal === true || source.orientation === 'horizontal',
     stacked: source.stacked === true,
@@ -226,7 +249,7 @@ function bar(source: Obj, warnings: string[]): BarSpec {
 function line(source: Obj, warnings: string[]): LineSpec {
   const spec: LineSpec = {
     infographic: 'line',
-    ...base(source),
+    ...base(source, warnings),
     ...seriesList(source, warnings),
     area: source.area === true,
   }
@@ -236,15 +259,16 @@ function line(source: Obj, warnings: string[]): LineSpec {
 }
 
 function donut(source: Obj, warnings: string[]): DonutSpec {
+  const cycle = cycleOf(source)
   const data: DonutSlice[] = []
   for (const [index, entry] of list(pick(source, 'data', 'slices', 'items'), LIMITS.slices, 'slices', warnings).entries()) {
     if (!isObj(entry)) continue
     const value = num(pick(entry, 'value', 'v', 'amount'))
     const label = text(pick(entry, 'label', 'name', 'title'), 40)
     if (value === null || value < 0 || label === undefined) continue
-    data.push({ label, value, color: ramp(pick(entry, 'color', 'tone', 'ramp'), DEFAULT_CYCLE[index % DEFAULT_CYCLE.length] as Ramp) })
+    data.push({ label, value, color: ramp(pick(entry, 'color', 'tone', 'ramp'), cycle[index % cycle.length] as Ramp) })
   }
-  const spec: DonutSpec = { infographic: 'donut', ...base(source), data }
+  const spec: DonutSpec = { infographic: 'donut', ...base(source, warnings), data }
   const rawCenter = source.center
   if (isObj(rawCenter)) {
     const value = text(rawCenter.value, 14)
@@ -275,7 +299,7 @@ function cards(source: Obj, warnings: string[]): CardsSpec {
     if (isRamp(color)) item.color = color
     items.push(item)
   }
-  return { infographic: 'cards', ...base(source), items }
+  return { infographic: 'cards', ...base(source, warnings), items }
 }
 
 function timeline(source: Obj, warnings: string[]): TimelineSpec {
@@ -291,10 +315,11 @@ function timeline(source: Obj, warnings: string[]): TimelineSpec {
     if (time !== undefined) item.time = time
     items.push(item)
   }
-  return { infographic: 'timeline', ...base(source), items }
+  return { infographic: 'timeline', ...base(source, warnings), items }
 }
 
 function layers(source: Obj, warnings: string[]): LayersSpec {
+  const cycle = cycleOf(source)
   const result: Layer[] = []
   for (const [index, entry] of list(pick(source, 'layers', 'tiers'), LIMITS.layers, 'layers', warnings).entries()) {
     if (!isObj(entry)) continue
@@ -307,9 +332,9 @@ function layers(source: Obj, warnings: string[]): LayersSpec {
       const sub = text(pick(item, 'sub', 'desc', 'description'), 60)
       return [sub === undefined ? { label: itemLabel } : { label: itemLabel, sub }]
     })
-    result.push({ label, color: ramp(pick(entry, 'color', 'tone', 'ramp'), DEFAULT_CYCLE[index % DEFAULT_CYCLE.length] as Ramp), items })
+    result.push({ label, color: ramp(pick(entry, 'color', 'tone', 'ramp'), cycle[index % cycle.length] as Ramp), items })
   }
-  return { infographic: 'layers', ...base(source), layers: result, arrows: source.arrows === true }
+  return { infographic: 'layers', ...base(source, warnings), layers: result, arrows: source.arrows === true }
 }
 
 function hasData(series: Series[]): boolean {
@@ -326,47 +351,49 @@ export function normalizeSpec(raw: unknown, options: NormalizeOptions = {}): Nor
   const kind = kindValue as Kind
   const warnings: string[] = []
   const streaming = options.streaming === true
+  // The style decides the auto-colour order, so it has to be known before the kind builders run.
+  const source: Obj = options.style === undefined ? raw : { ...raw, style: options.style }
   let spec: InfographicSpec
   let renderable: boolean
   switch (kind) {
     case 'flow': {
-      const value = flow(raw, warnings, streaming)
+      const value = flow(source, warnings, streaming)
       spec = value
       renderable = value.nodes.length > 0
       break
     }
     case 'bar': {
-      const value = bar(raw, warnings)
+      const value = bar(source, warnings)
       spec = value
       renderable = value.categories.length > 0 && hasData(value.series)
       break
     }
     case 'line': {
-      const value = line(raw, warnings)
+      const value = line(source, warnings)
       spec = value
       renderable = value.categories.length > 0 && hasData(value.series)
       break
     }
     case 'donut': {
-      const value = donut(raw, warnings)
+      const value = donut(source, warnings)
       spec = value
       renderable = value.data.some(slice => slice.value > 0)
       break
     }
     case 'cards': {
-      const value = cards(raw, warnings)
+      const value = cards(source, warnings)
       spec = value
       renderable = value.items.length > 0
       break
     }
     case 'timeline': {
-      const value = timeline(raw, warnings)
+      const value = timeline(source, warnings)
       spec = value
       renderable = value.items.length > 0
       break
     }
     case 'layers': {
-      const value = layers(raw, warnings)
+      const value = layers(source, warnings)
       spec = value
       renderable = value.layers.length > 0
       break

@@ -32,11 +32,12 @@ describe('node plugin', () => {
   })
 
   it('declares its host dependencies and a name that matches the manifest and patch', () => {
-    const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')) as { name: string; dsh: { bundle: { patch: string }; client: { platform: string } } }
+    const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')) as { name: string; exports: Record<string, unknown>; dsh: { bundle: { patch: string }; client: { platform: string } } }
     expect(name).toBe(pkg.name)
     expect(inject).toContain('systemPrompt')
     expect(readFileSync(join(root, pkg.dsh.bundle.patch), 'utf8')).toContain(`'${pkg.name}'`)
     expect(pkg.dsh.client.platform).toBe('web')
+    expect(pkg.exports?.['./client']).toBeDefined()
   })
 
   it('documents every kind in the prompt section and in SKILL.md', () => {

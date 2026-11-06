@@ -9,8 +9,9 @@
  */
 import { looksLikeInfographic, readFence, renderSvg } from '../core/index.ts'
 import type { InfographicSpec } from '../core/index.ts'
-import { copyText, download, exportSvg, fileStem, svgToPngBlob } from './export.ts'
-import { detectLocale, label, type LabelKey, type Locale } from './i18n.ts'
+import { DEFAULT_STYLE, STYLES, type StyleName } from '../core/palettes.ts'
+import { copyPng, copyText, download, exportSvg, fileStem, svgToPngBlob, withStyle } from './export.ts'
+import { detectLocale, label, styleLabel, type LabelKey, type Locale } from './i18n.ts'
 import { CSS, STYLE_ID } from './styles.ts'
 
 const SURFACES = '.md-code-block, .code-block, .code-block-small'
@@ -36,12 +37,22 @@ const SCAN_DELAY_MS = 80
 const SWEEP_MS = 1000
 const INLINE_CROP_X = 26
 const INLINE_CROP_Y = 8
+/** Where the viewer's last explicit style pick is remembered between sessions. */
+export const STYLE_STORAGE_KEY = 'dsh-infographic:style'
+const STYLE_SELECT = 'select.dsh-ig-style'
 
 export interface ChannelOptions {
   doc?: Document
   locale?: Locale
   sweepMs?: number
+  /** Persistence for the style picker. `null` disables it; omitted → `window.localStorage`. */
+  storage?: Storage | null
   log?: (message: string) => void
+}
+
+/** Narrow an unknown value to a known style id (storage and DOM values are untrusted). */
+function asStyle(value: unknown): StyleName | null {
+  return STYLES.find(style => style === value) ?? null
 }
 
 function normalizeLabel(text: string): string {
@@ -178,6 +189,33 @@ export function installFenceChannel(options: ChannelOptions = {}): Channel {
     doc.head.append(style)
   }
 
+  const storage: Storage | null =
+    options.storage !== undefined
+      ? options.storage
+      : ((): Storage | null => {
+          try {
+            return view?.localStorage ?? null
+          } catch {
+            return null // storage can throw on access in sandboxed/partitioned contexts
+          }
+        })()
+
+  /** The viewer's pick in this page load. Null until they touch the dropdown. */
+  let userStyle: StyleName | null = null
+  /** Last persisted pick, used only for specs that do not name a style of their own. */
+  let storedStyle: StyleName | null = null
+  try {
+    storedStyle = asStyle(storage?.getItem(STYLE_STORAGE_KEY))
+  } catch {
+    storedStyle = null
+  }
+
+  /**
+   * Cascade for one image: the viewer's explicit pick (this page load) > the style the chart
+   * author wrote into the spec > the persisted pick > `claude`.
+   */
+  const styleFor = (spec: InfographicSpec): StyleName => userStyle ?? asStyle(spec.style) ?? storedStyle ?? DEFAULT_STYLE
+
   const button = (caption: string, onClick: (self: HTMLButtonElement) => void | Promise<void>): HTMLButtonElement => {
     const element = doc.createElement('button')
     element.type = 'button'
@@ -210,21 +248,56 @@ export function installFenceChannel(options: ChannelOptions = {}): Channel {
         },
       )
 
+  /** Style dropdown. Every mount carries one; they are kept in sync by `applyStyle`. */
+  const styleSelect = (): HTMLSelectElement => {
+    const select = doc.createElement('select')
+    select.className = 'dsh-ig-style'
+    select.setAttribute('aria-label', text('style'))
+    select.title = text('style')
+    for (const style of STYLES) {
+      const option = doc.createElement('option')
+      option.value = style
+      option.textContent = styleLabel(locale, style)
+      select.append(option)
+    }
+    select.value = userStyle ?? storedStyle ?? DEFAULT_STYLE
+    select.addEventListener('change', () => applyStyle(select.value))
+    return select
+  }
+
+  /** Remember an explicit pick and repaint every mounted image with it. */
+  const applyStyle = (value: unknown): void => {
+    const style = asStyle(value)
+    if (style === null) return
+    userStyle = style
+    storedStyle = style
+    try {
+      storage?.setItem(STYLE_STORAGE_KEY, style)
+    } catch {
+      /* private mode or storage disabled: the pick still applies to this page load */
+    }
+    for (const select of doc.querySelectorAll<HTMLSelectElement>(STYLE_SELECT)) select.value = style
+    for (const mount of mounts.values()) if (mount.spec !== null) paint(mount, mount.spec)
+  }
+
   const buildBar = (mount: Mount): void => {
     mount.bar.replaceChildren()
     const spec = mount.spec
     if (spec === null) return
     const stem = fileStem(spec)
     const theme = (): 'light' | 'dark' => mount.theme
+    const style = (): StyleName => styleFor(spec)
     mount.bar.append(
-      button(text('copySvg'), self => guarded(self, () => copyText(exportSvg(spec, theme()), doc), text('copied'))),
-      button(text('downloadSvg'), self => guarded(self, () => download(`${stem}.svg`, new Blob([exportSvg(spec, theme())], { type: 'image/svg+xml' }), doc))),
-      button(text('downloadPng'), self => guarded(self, async () => download(`${stem}.png`, await svgToPngBlob(spec, theme(), doc), doc))),
+      button(text('copyPng'), self => guarded(self, () => copyPng(spec, theme(), style(), doc), text('copied'))),
+      button(text('downloadPng'), self => guarded(self, async () => download(`${stem}.png`, await svgToPngBlob(spec, theme(), style(), doc), doc))),
+      button(text('copySvg'), self => guarded(self, () => copyText(exportSvg(spec, theme(), style()), doc), text('copied'))),
+      button(text('downloadSvg'), self => guarded(self, () => download(`${stem}.svg`, new Blob([exportSvg(spec, theme(), style())], { type: 'image/svg+xml' }), doc))),
       button(text('source'), self => {
         const open = mount.source.hidden
         mount.source.hidden = !open
         self.textContent = open ? text('hideSource') : text('source')
       }),
+      styleSelect(),
     )
   }
 
@@ -270,8 +343,10 @@ export function installFenceChannel(options: ChannelOptions = {}): Channel {
 
   const paint = (mount: Mount, spec: InfographicSpec): void => {
     mount.theme = detectTheme(mount.container)
-    const { svg } = renderSvg(spec, { idPrefix: mount.prefix })
+    const style = styleFor(spec)
+    const { svg } = renderSvg(withStyle(spec, style), { idPrefix: mount.prefix, style })
     mount.stage.innerHTML = svg
+    mount.container.dataset.style = style
     const element = mount.stage.querySelector('svg')
     element?.setAttribute('data-theme', mount.theme)
     const box = element?.getAttribute('viewBox')?.split(' ').map(Number)
@@ -287,7 +362,7 @@ export function installFenceChannel(options: ChannelOptions = {}): Channel {
     const key = `${settled ? 's' : 'p'}|${raw}`
     const existing = mounts.get(block)
     if (existing !== undefined && existing.key === key && existing.stage.firstElementChild !== null) return
-    const result = readFence(raw, { streaming: !settled })
+    const result = readFence(raw, { streaming: !settled, resolveStyle: own => userStyle ?? own ?? storedStyle ?? DEFAULT_STYLE })
     if (result.status === 'pending') return
     if (result.status === 'error') {
       release(block)

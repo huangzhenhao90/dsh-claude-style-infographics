@@ -30,4 +30,4 @@ SOFTWARE.
 
 ## pi-generative-ui
 
-The visual system (the nine colour ramps, the 680px canvas, flat style, light/dark pairing) comes from the design rules in [`Michaelliv/pi-generative-ui`](https://github.com/Michaelliv/pi-generative-ui), as already credited in `README.md` and `skill/`. `src/core/theme.ts` re-expresses those rules as data.
+The visual system (the nine colour ramps, the 680px canvas, flat style, light/dark pairing) comes from the design rules in [`Michaelliv/pi-generative-ui`](https://github.com/Michaelliv/pi-generative-ui), as already credited in `README.md`. `src/core/theme.ts` re-expresses those rules as data.

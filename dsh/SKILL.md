@@ -5,7 +5,7 @@ description: "Draw a clean, Claude-artifact-style infographic inline in the repl
 
 # Infographic — 在对话里直接画信息图
 
-在**回答正文**里写一个语言标记为 `infographic` 的围栏，内容是 JSON 规格；界面会把它画成一张 SVG 信息图，并带「复制 SVG / 下载 SVG / 下载 PNG / 源码」按钮。文字照常穿插在图的前后。
+在**回答正文**里写一个语言标记为 `infographic` 的围栏，内容是 JSON 规格；界面会把它画成一张 SVG 信息图，并带「复制 PNG / 下载 PNG / 复制 SVG / 下载 SVG / 源码」按钮和一个风格切换器。文字照常穿插在图的前后。
 
 ```infographic
 {"infographic":"bar","title":"…","categories":["…"],"series":[{"name":"…","data":[1,2]}]}
@@ -29,8 +29,13 @@ description: "Draw a clean, Claude-artifact-style infographic inline in the repl
 | `title` | 图标题，一行 |
 | `subtitle` | 副标题，一行 |
 | `note` | 底部注释：数据口径、单位、来源，最多两行 |
+| `style` | 视觉风格，见下。不写则跟随界面当前选中的风格（默认 `claude`） |
 
-调色名（`color`）：`purple` `teal` `coral` `pink` `gray` `blue` `green` `amber` `red`。颜色表示类别，不表示好坏；不写则按顺序自动配色。
+风格（`style`）：`claude`（默认，Claude artifact 的柔和九色）、`mckinsey`（麦肯锡：亮青蓝 `#2CBDEF` 主色 + 对照灰 `#D4D4D4`）、`bcg`（BCG：标志性绿 `#2CA02C`，只有绿）、`economist`（经济学人：`#E3120B` 红色主系列，并在图顶画出红色横线 + 左上红方块版头，`#006BA2` 编辑蓝为第二系列）。
+
+**什么时候写 `style`：** 图要落进一份有固定视觉规范的材料时，由你在围栏里写死，这样导出的 PNG/SVG 就是那个风格。只在对话里看一眼，就不用写；界面上随时可以手动切。写死之后界面上的切换器以用户的选择为准。
+
+调色名（`color`）：`purple` `teal` `coral` `pink` `gray` `blue` `green` `amber` `red`。颜色表示类别，不表示好坏；不写则按顺序自动配色。**调色名是「槽位」，不是色相承诺**——`blue` 在 `claude` 下是青蓝，在 `bcg` 下是深绿（BCG 的视觉语言里没有蓝色）。三套品牌风格是近单色的：自动配色只在品牌自己的色相家族里走深浅。只有 `red`/`green`/`amber` 在四套风格里语义固定，涨跌色和告警色不会说谎。换风格不用改 JSON。
 
 长度上限：单段文字约 160 字；`flow` 40 个节点、80 条边；`bar`/`line` 24 个类别、6 个系列；`donut` 12 块；`cards` 12 张；`timeline` 16 项；`layers` 8 层、每层 8 项。超出部分会被丢弃，并在图下方提示「已自动修正」。
 

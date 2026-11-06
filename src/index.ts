@@ -25,7 +25,7 @@ export const SECTION_TEXT = `Draw an infographic inside your reply with a fenced
 
 - The first key is "infographic": flow | bar | line | donut | cards | timeline | layers. Language tag is exactly \`infographic\`; the JSON is the only content (no SVG, HTML, Markdown or comments).
 - flow: nodes[{id,label,sub?,shape?:box|pill|diamond,color?}] + edges[["from","to","label?"]], direction down|right. bar/line: categories[] + series[{name,data[],color?}], unit?, horizontal?, stacked?, area?. donut: data[{label,value}], center?{value,label}. cards: items[{label,value,delta?,note?}]. timeline: items[{time?,title,desc?}]. layers: layers[{label,items[{label,sub?}]}], arrows?.
-- Optional on every kind: title, subtitle, note (data source / unit / "sample data"). Colours are names only: purple teal coral pink gray blue green amber red.
+- Optional on every kind: title, subtitle, note (data source / unit / "sample data"), style (claude | mckinsey | bcg | economist — match the house style of the document it lands in; default claude). Colours are names only: purple teal coral pink gray blue green amber red.
 - Write the fence in the answer body, never in reasoning. Write all visible text in the user's language. Do not repeat the chart's content in prose. Never invent numbers; mark illustrative data in note.
 - Load the \`infographic\` skill for the full field reference and examples before your first use in a session.`
 

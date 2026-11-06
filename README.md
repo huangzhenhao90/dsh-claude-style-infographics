@@ -1,17 +1,14 @@
 # Claude infographic Charts
 
-让任何大模型都能生成 Claude artifact 风格的专业图表、流程图和交互式可视化。现在有两种用法：
+一个 DSH 插件：让模型在 DeepSeek Harness（DSH）对话里直接画出 Claude artifact 风格的专业图表、流程图和可视化。
 
-| | 提示词 Skill（原有） | DSH 嵌入模式（新增） |
-|---|---|---|
-| 模型输出 | 整段 SVG / HTML 文件 | 一小段 `infographic` JSON 规格 |
-| 渲染位置 | 你自己保存、打开 | 直接画在 DeepSeek Harness（DSH）对话里 |
-| 流式 | 写完才能看 | 边写边画 |
-| 安全 | 取决于你怎么打开文件 | 不执行模型写的任何标记，只画白名单里的七种图 |
-| 导出 | 文件本身 | 复制 / 下载 SVG，下载 PNG |
-| 适合 | 报告、PPT、公众号里的精修图；任意模型 | 对话里随手出图、改图 |
+- **模型输出**：一小段 `infographic` JSON 规格（不是整段 SVG / HTML 文件）
+- **渲染位置**：直接画在 DSH 对话里，边写边画
+- **安全**：不执行模型写的任何标记，只画白名单里的七种图
+- **导出**：复制 / 下载 PNG，复制 / 下载 SVG
+- **适合**：对话里随手出图、改图；报告、PPT、公众号里的精修图
 
-两种用法共用同一套视觉规范（9 色调色板、680px 画布、扁平风格、亮暗模式）。下面先讲 DSH 嵌入模式，原有 Skill 的说明在后面。
+视觉规范沿用 Claude artifact 的那一套：9 色调色板、680px 画布、扁平风格、亮暗模式。另有 `mckinsey` / `bcg` / `economist` 三套品牌风格，一键切换（见[四套视觉风格](#四套视觉风格)）。
 
 ---
 
@@ -45,7 +42,7 @@ dsh plugin --profile web add link:/绝对路径/claude-infographic-charts
 
 ### 60 秒验证
 
-装好、重启 DSH 后，对模型说："用 infographic 画一个用户登录的流程图，要有失败重试。" 应当看到：围栏变成流程图；输出过程中图会逐步成形；写完后图下方出现 `复制 SVG / 下载 SVG / 下载 PNG / 源码`。
+装好、重启 DSH 后，对模型说："用 infographic 画一个用户登录的流程图，要有失败重试。" 应当看到：围栏变成流程图；输出过程中图会逐步成形；写完后图下方出现 `复制 PNG / 下载 PNG / 复制 SVG / 下载 SVG / 源码`，右侧还有风格切换器。
 
 ### 规格速查
 
@@ -65,8 +62,9 @@ dsh plugin --profile web add link:/绝对路径/claude-infographic-charts
 
 ### 导出
 
-- **复制 SVG / 下载 SVG**：独立 SVG 文件，按当前页面的亮暗主题烘焙成单一主题，可直接放进报告、网页；
+- **复制 PNG**：直接进剪贴板，粘到飞书文档、Word、公众号编辑器里就是图（**推荐**——多数编辑器不认 SVG，粘 SVG 会变成一段代码）；
 - **下载 PNG**：2 倍分辨率，白底（暗色页面为深色底），可插入 PPT 和公众号；
+- **复制 SVG / 下载 SVG**：独立 SVG 文件，按当前页面的亮暗主题烘焙成单一主题，适合放进报告、网页、再做二次编辑；
 - **PPT 原生对象导出尚未实现**，目前是把 PNG / SVG 作为图片插入。
 
 ### 非 DSH 页面
@@ -100,20 +98,6 @@ pnpm check       # 清理 → 类型检查 → 测试 → 构建 → 产物协�
 - **尚未在真实 DSH 宿主里端到端验证**（插件加载、系统提示词注入、模型实际写出围栏）。宿主的 DOM 结构按 dsh-genui 的做法适配，若宿主版本变化导致发现失败，围栏会保持原样显示为代码块，不会丢内容。
 - 暂未实现：围栏写坏时让模型自动重发的反馈回路、`validate` / `render` 模型工具、点击图元回传给模型的交互、PPT 原生导出。
 
-> 说明：以下是原有的提示词 Skill 模式，内容未改动。
-
----
-
-## 这是什么
-
-这是一套提示词 Skill，提炼自 Claude 内置的生成式 UI 系统，将其视觉风格标准化为任何 LLM 都能遵循的规则文件。
-
-Claude 的 artifact 图表有一套独特的设计语言：9 色调色系、680px viewBox 基准、极简扁平美学、完整的亮/暗模式支持。这套 Skill 把这些规则从 Claude 的专有渲染管线中剥离出来，变成独立的、可复用的提示词规范。
-
-**输出格式两种：**
-- **SVG 文件** — 静态图表、流程图、架构图、插画
-- **HTML 文件** — 需要 JavaScript 的交互式图表（Chart.js、滑块、动画）
-
 ---
 
 ## 效果预览
@@ -146,13 +130,6 @@ claude infographic charts/
 ├── dsh/SKILL.md                      ← DSH 嵌入模式的内置 Skill（infographic 围栏规格）
 ├── src/ · examples/ · docs/gallery/  ← DSH 插件源码 / 规格示例 / 渲染结果
 ├── lib/                              ← pnpm build 的产物（不入库）
-├── skill/
-│   ├── SKILL.md                      ← 主 Skill 文件（模块路由 + 格式决策 + 完整规范）
-│   ├── diagram.md                    ← 流程图 / 结构图 / 说明图
-│   ├── chart-types.md                ← 图表类型选择指南（9 种图表）
-│   ├── mockup.md                     ← UI 组件 / 仪表盘 / 数据卡片
-│   ├── interactive.md                ← 滑块 / 动画 / stepper 交互组件
-│   └── art.md                        ← SVG 插画 / 几何图案
 └── tests/
     ├── test-flowchart.svg            ← 测试流程图
     ├── openclaw-overview.svg         ← 架构概览图
@@ -165,7 +142,28 @@ claude infographic charts/
 
 ## 设计系统核心
 
-### 9 色调色板
+### 四套视觉风格
+
+同一份 JSON，换风格不用改一个字段——`style` 只决定调色板与中性色：
+
+| 风格 | 品牌锚点 | 自动配色顺序（不写 `color` 时） |
+|------|---------|------------------------------|
+| `claude`（默认） | Claude artifact 的柔和九色 | purple → teal → coral → blue → pink … |
+| `mckinsey` | 亮青蓝 `#2CBDEF` + 对照灰 `#D4D4D4` + 深藏青 `#051C2C` | blue → teal → purple → pink → coral → gray |
+| `bcg` | 标志性绿 `#2CA02C` | green → teal → blue → amber → purple → pink |
+| `economist` | 红 `#E3120B` + 编辑蓝 `#006BA2` | red → blue → teal → green → amber → gray |
+
+三套品牌风格的锚点取自真实的咨询 / 媒体图表规范，不是"把品牌色当主色调"了事：
+
+- **McKinsey** 的语言是**极简高反差**——重点组用亮青蓝、对照组用浅灰，两色贯穿全报告。所以自动配色走的是同一个蓝的深浅，而不是九个色相。
+- **BCG** 的语言是**绿色为唯一主色**，无渐变、无装饰。
+- **The Economist** 的招牌是**版头**——顶部全宽红横线 + 左上红方块 tag。这两笔是版式元素，插件会为 `economist` 风格自动画出来（其它三套不画）；系列色则从红 `#E3120B` 起，接编辑蓝 `#006BA2` → 青 `#3EBCD2` → 绿 `#379A8B` → 黄 `#EBB434` → 灰 `#758D99`。
+
+`claude` 的九个色系是**彼此分开的色相**（色相就是类别编码）。三套品牌风格正好相反——它们是**近单色**的：自动配色只在品牌自己的色相家族里走深浅，因为真实的麦肯锡 / BCG 图表本来就只有「一个品牌色 + 一个中性色」。
+
+**所以调色名是一个「槽位」，不是色相承诺**：`blue` 在 `claude` 下是青蓝，在 `bcg` 下是一个深绿——因为 BCG 的视觉语言里根本没有蓝色。只有品牌风格的自动配色序列会这样重涂；`red` / `green` / `amber` 在四套风格里始终是红 / 绿 / 琥珀，所以涨跌色与告警色永远不会说谎。
+
+### 9 色调色板（`claude`）
 
 | 色系   | 400（主色）| 600（描边）| 800（深色）|
 |--------|-----------|-----------|-----------|
@@ -179,35 +177,12 @@ claude infographic charts/
 | amber  | `#BA7517` | `#854F0B` | `#633806` |
 | red    | `#E24B4A` | `#A32D2D` | `#791F1F` |
 
-每个色系包含 7 个色阶（50 / 100 / 200 / 400 / 600 / 800 / 900），完整色表见 `skill/SKILL.md`。
+每个色系包含 7 个色阶（50 / 100 / 200 / 400 / 600 / 800 / 900），完整色表见 `src/core/palettes.ts`。
 
-### 三条核心规则
+### 两条核心规则
 
 1. **ViewBox 宽度固定 680px** — 所有 SVG 使用 `viewBox="0 0 680 H"`，`width="100%"`
 2. **Flat 美学** — 无渐变、无阴影、无模糊，字重只用 400 / 500
-3. **格式决策** — 静态内容 → SVG；需要 JS 交互 → 自包含 HTML
-
----
-
-## 使用方法
-
-### 在 Claude Code / Cowork 中作为 Skill
-
-将整个仓库文件夹放入你的项目目录下的 `.claude/skills/` 中，并重命名为 `claude-svg-charts`，即可被 Claude Code 自动识别为可调用的 Skill。
-
-### 作为提示词上下文（任何模型）
-
-直接将 `skill/SKILL.md` 的内容作为 system prompt 或 context 传给任何 LLM，让它生成对应风格的 SVG 或 HTML 文件。需要更详细规范时，附上对应的 `skill/*.md` 模块文件。
-
-### 五个视觉模块
-
-| 模块 | 参考文件 | 适用场景 |
-|------|---------|---------|
-| **diagram** | `skill/diagram.md` | 流程图、架构图、原理说明图 |
-| **chart** | `skill/chart-types.md` | 柱状图、折线图、饼图、散点图 |
-| **mockup** | `skill/mockup.md` | UI 界面、数据卡片、仪表盘 |
-| **interactive** | `skill/interactive.md` | 滑块、按钮、实时计算、动画 |
-| **art** | `skill/art.md` | 插画、几何图案、装饰性视觉 |
 
 ---
 
@@ -219,7 +194,7 @@ claude infographic charts/
 
 该仓库对 Claude 内置的生成式 UI 系统进行了逆向工程和开源还原，包含完整的 SVG 样式定义（`svg-styles.ts`）、9 色调色板规范、以及 5 个视觉模块的 Claude 官方提示词指南（`diagram.md`、`interactive.md`、`art.md` 等）。
 
-本 Skill 的工作是：将上述规范从 Claude 的专有渲染上下文中抽离，转换为任何 LLM 都能独立遵循的可移植提示词文件，同时扩展了 HTML 交互输出的支持。
+本插件的工作是：把上述规范从 Claude 的专有渲染上下文中抽离，落成可独立使用的数据与渲染规则（`src/core/theme.ts`、`src/core/palettes.ts`）。
 
 ---
 

@@ -40,6 +40,7 @@ if (!globalBuild.includes('DshInfographic')) problems.push('infographic.global.j
 const patch = readFileSync(fileURLToPath(new URL('../cordis.patch.yml', import.meta.url)), 'utf8')
 const pkg = JSON.parse(readFileSync(fileURLToPath(new URL('../package.json', import.meta.url)), 'utf8'))
 if (!patch.includes(`'${pkg.name}'`)) problems.push('cordis.patch.yml: package name does not match package.json')
+if (pkg.dsh?.client && !pkg.exports?.['./client']) problems.push('package.json: dsh.client declared but exports["./client"] is missing')
 
 if (problems.length > 0) {
   for (const problem of problems) console.error(problem)
