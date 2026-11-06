@@ -49,7 +49,10 @@ const clientConfig: UserConfig = {
   minify: true,
   sourcemap: false,
   clean: false,
-  deps: { alwaysBundle: () => true },
+  deps: {
+    alwaysBundle: () => true,
+    neverBundle: ['react', 'react/jsx-runtime', 'react-dom'],
+  },
   define,
   outputOptions: {
     entryFileNames: 'client.js',
