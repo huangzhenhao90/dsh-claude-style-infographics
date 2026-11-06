@@ -11,16 +11,6 @@ export const CSS = `
 [data-infographic-host] .dsh-ig-bar select.dsh-ig-style:hover,[data-infographic-host] .dsh-ig-bar select.dsh-ig-style:focus-visible{opacity:1}
 [data-infographic-host] .dsh-ig-bar select.dsh-ig-style option{color:#2C2C2A;background:#FFFFFF}
 [data-infographic-host] .dsh-ig-warn{opacity:.55;cursor:help}
-[data-infographic-host] .dsh-ig-bar button.dsh-ig-settings-btn{padding:2px 7px}
-[data-infographic-host] .dsh-ig-settings-panel{margin:8px 0 0;padding:12px 14px;border-radius:10px;border:1px solid color-mix(in srgb,currentColor 16%,transparent);background:color-mix(in srgb,currentColor 4%,var(--ig-surface,#fff));font:12px/1.5 system-ui,-apple-system,'PingFang SC',sans-serif}
-[data-infographic-host] .dsh-ig-settings-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;font-weight:600}
-[data-infographic-host] .dsh-ig-settings-sec{margin-top:8px}
-[data-infographic-host] .dsh-ig-settings-sec-title{font-weight:500;opacity:.8;margin-bottom:4px}
-[data-infographic-host] .dsh-ig-freq-options{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:6px}
-[data-infographic-host] .dsh-ig-freq-card{display:flex;flex-direction:column;gap:2px;padding:6px 8px;border-radius:6px;border:1px solid color-mix(in srgb,currentColor 15%,transparent);cursor:pointer;background:transparent;text-align:left}
-[data-infographic-host] .dsh-ig-freq-card:hover{background:color-mix(in srgb,currentColor 6%,transparent)}
-[data-infographic-host] .dsh-ig-freq-card.active{border-color:color-mix(in srgb,currentColor 50%,transparent);background:color-mix(in srgb,currentColor 10%,transparent);font-weight:500}
-[data-infographic-host] .dsh-ig-freq-desc{font-size:11px;opacity:.65}
 [data-infographic-host] .dsh-ig-source{margin:6px 0 0;padding:10px 12px;max-height:320px;overflow:auto;border-radius:8px;background:color-mix(in srgb,currentColor 6%,transparent);font:12px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;white-space:pre-wrap;word-break:break-all}
 [data-infographic-diagnostic]{display:block;margin:8px 0 4px;padding:8px 12px;border-radius:8px;border:1px solid color-mix(in srgb,#d03a2f 45%,transparent);background:color-mix(in srgb,#d03a2f 8%,transparent);font:13px/1.5 system-ui,-apple-system,'PingFang SC','Microsoft YaHei',sans-serif}
 `

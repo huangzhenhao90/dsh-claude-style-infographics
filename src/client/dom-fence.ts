@@ -10,7 +10,6 @@
 import { looksLikeInfographic, readFence, renderSvg } from '../core/index.ts'
 import type { InfographicSpec } from '../core/index.ts'
 import { DEFAULT_STYLE, STYLES, isStyle, type StyleName } from '../core/palettes.ts'
-import { DEFAULT_FREQUENCY, isFrequency, type Frequency } from '../core/config.ts'
 import { copyPng, copyText, download, exportSvg, fileStem, svgToPngBlob, withStyle } from './export.ts'
 import { detectLocale, label, styleLabel, type LabelKey, type Locale } from './i18n.ts'
 import { CSS, STYLE_ID } from './styles.ts'
@@ -153,7 +152,6 @@ interface Mount {
   container: HTMLElement
   stage: HTMLElement
   bar: HTMLElement
-  settingsPanel: HTMLElement
   source: HTMLElement
   prefix: string
   key: string
@@ -213,15 +211,7 @@ export function installFenceChannel(options: ChannelOptions = {}): Channel {
     storedStyle = null
   }
 
-  let currentFrequency: Frequency = DEFAULT_FREQUENCY
-  try {
-    const rawFreq = storage?.getItem(FREQ_STORAGE_KEY)
-    if (isFrequency(rawFreq)) currentFrequency = rawFreq
-  } catch {
-    currentFrequency = DEFAULT_FREQUENCY
-  }
-
-  const syncRemoteConfig = (patch: { frequency?: Frequency; defaultStyle?: StyleName }): void => {
+  const syncRemoteConfig = (patch: { defaultStyle?: StyleName }): void => {
     try {
       if (typeof fetch !== 'undefined') {
         void fetch('/api/infographic/config', {
@@ -242,12 +232,6 @@ export function installFenceChannel(options: ChannelOptions = {}): Channel {
         .then(r => r.json())
         .then((res: any) => {
           if (res?.ok && res.config) {
-            if (isFrequency(res.config.frequency)) {
-              currentFrequency = res.config.frequency
-              try {
-                storage?.setItem(FREQ_STORAGE_KEY, currentFrequency)
-              } catch {}
-            }
             if (isStyle(res.config.defaultStyle) && userStyle === null && storedStyle === null) {
               const remoteStyle = res.config.defaultStyle
               storedStyle = remoteStyle
@@ -327,98 +311,9 @@ export function installFenceChannel(options: ChannelOptions = {}): Channel {
     } catch {
       /* private mode or storage disabled: the pick still applies to this page load */
     }
+    syncRemoteConfig({ defaultStyle: style })
     for (const select of doc.querySelectorAll<HTMLSelectElement>(STYLE_SELECT)) select.value = style
     for (const block of mounts.keys()) render(block)
-  }
-
-  const renderSettingsPanel = (mount: Mount): void => {
-    mount.settingsPanel.replaceChildren()
-
-    const head = doc.createElement('div')
-    head.className = 'dsh-ig-settings-head'
-    const title = doc.createElement('span')
-    title.textContent = `⚙️ ${text('settingsTitle')}`
-    const savedTip = doc.createElement('span')
-    savedTip.className = 'dsh-ig-save-tip'
-    head.append(title, savedTip)
-
-    const notifySaved = (): void => {
-      savedTip.textContent = text('settingsSaved')
-      setTimeout(() => {
-        savedTip.textContent = ''
-      }, 1500)
-    }
-
-    // 1. Frequency Section
-    const freqSec = doc.createElement('div')
-    freqSec.className = 'dsh-ig-settings-sec'
-    const freqTitle = doc.createElement('div')
-    freqTitle.className = 'dsh-ig-settings-sec-title'
-    freqTitle.textContent = text('settingsFrequency')
-    freqSec.append(freqTitle)
-
-    const freqGroup = doc.createElement('div')
-    freqGroup.className = 'dsh-ig-freq-options'
-
-    const freqDefs: { id: Frequency; labelKey: LabelKey; descKey: LabelKey }[] = [
-      { id: 'high', labelKey: 'settingsFreqHigh', descKey: 'settingsFreqHighDesc' },
-      { id: 'medium', labelKey: 'settingsFreqMedium', descKey: 'settingsFreqMediumDesc' },
-      { id: 'low', labelKey: 'settingsFreqLow', descKey: 'settingsFreqLowDesc' },
-    ]
-
-    for (const def of freqDefs) {
-      const card = doc.createElement('button')
-      card.type = 'button'
-      card.className = `dsh-ig-freq-card${currentFrequency === def.id ? ' active' : ''}`
-      const name = doc.createElement('span')
-      name.textContent = text(def.labelKey)
-      const desc = doc.createElement('span')
-      desc.className = 'dsh-ig-freq-desc'
-      desc.textContent = text(def.descKey)
-      card.append(name, desc)
-
-      card.addEventListener('click', () => {
-        currentFrequency = def.id
-        try {
-          storage?.setItem(FREQ_STORAGE_KEY, def.id)
-        } catch {}
-        syncRemoteConfig({ frequency: def.id })
-        notifySaved()
-        for (const m of mounts.values()) {
-          if (!m.settingsPanel.hidden) renderSettingsPanel(m)
-        }
-      })
-      freqGroup.append(card)
-    }
-    freqSec.append(freqGroup)
-
-    // 2. Default Style Section
-    const styleSec = doc.createElement('div')
-    styleSec.className = 'dsh-ig-settings-sec'
-    const styleTitle = doc.createElement('div')
-    styleTitle.className = 'dsh-ig-settings-sec-title'
-    styleTitle.textContent = text('settingsDefaultStyle')
-    styleSec.append(styleTitle)
-
-    const select = doc.createElement('select')
-    select.className = 'dsh-ig-style'
-    select.style.marginLeft = '0'
-    select.style.maxWidth = '14em'
-    for (const st of STYLES) {
-      const opt = doc.createElement('option')
-      opt.value = st
-      opt.textContent = styleLabel(locale, st)
-      select.append(opt)
-    }
-    select.value = userStyle ?? storedStyle ?? DEFAULT_STYLE
-    select.addEventListener('change', () => {
-      applyStyle(select.value)
-      syncRemoteConfig({ defaultStyle: asStyle(select.value) ?? DEFAULT_STYLE })
-      notifySaved()
-    })
-    styleSec.append(select)
-
-    mount.settingsPanel.append(head, freqSec, styleSec)
   }
 
   const buildBar = (mount: Mount): void => {
@@ -437,11 +332,6 @@ export function installFenceChannel(options: ChannelOptions = {}): Channel {
         const open = mount.source.hidden
         mount.source.hidden = !open
         self.textContent = open ? text('hideSource') : text('source')
-      }),
-      button(`⚙️ ${text('settings')}`, () => {
-        const open = mount.settingsPanel.hidden
-        mount.settingsPanel.hidden = !open
-        if (!mount.settingsPanel.hidden) renderSettingsPanel(mount)
       }),
       styleSelect(),
     )
@@ -464,14 +354,11 @@ export function installFenceChannel(options: ChannelOptions = {}): Channel {
     stage.className = 'dsh-ig-stage'
     const bar = doc.createElement('div')
     bar.className = 'dsh-ig-bar'
-    const settingsPanel = doc.createElement('div')
-    settingsPanel.className = 'dsh-ig-settings-panel'
-    settingsPanel.hidden = true
     const source = doc.createElement('pre')
     source.className = 'dsh-ig-source'
     source.hidden = true
-    container.append(stage, bar, settingsPanel, source)
-    const mount: Mount = { block, container, stage, bar, settingsPanel, source, prefix: `ig-${counter}`, key: '', spec: null, theme: 'light' }
+    container.append(stage, bar, source)
+    const mount: Mount = { block, container, stage, bar, source, prefix: `ig-${counter}`, key: '', spec: null, theme: 'light' }
     insertBefore(block, container)
     block.style.display = 'none'
     block.setAttribute(TAKEN_ATTR, '')

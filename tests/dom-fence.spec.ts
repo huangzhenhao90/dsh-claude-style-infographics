@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { STYLE_STORAGE_KEY, detectTheme, findInfographicBlocks, installFenceChannel, isPlausibleSurface, type Channel } from '../src/client/index.ts'
+import { STYLE_STORAGE_KEY, createSettingsPanel, detectTheme, findInfographicBlocks, installFenceChannel, isPlausibleSurface, type Channel } from '../src/client/index.ts'
 import { normalizeSpec, renderSvg } from '../src/core/index.ts'
 import type { StyleName } from '../src/core/palettes.ts'
 
@@ -117,7 +117,7 @@ describe('channel', () => {
     expect(host?.nextElementSibling).toBe(document.querySelector('.md-code-block'))
     expect(document.body.textContent).toContain('before')
     expect(document.body.textContent).toContain('after')
-    expect([...host?.querySelectorAll('.dsh-ig-bar button') ?? []].map(button => button.textContent)).toEqual(['Copy PNG', 'Download PNG', 'Copy SVG', 'Download SVG', 'Source', '⚙️ Settings'])
+    expect([...host?.querySelectorAll('.dsh-ig-bar button') ?? []].map(button => button.textContent)).toEqual(['Copy PNG', 'Download PNG', 'Copy SVG', 'Download SVG', 'Source'])
   })
 
   it('renders progressively while streaming, without a toolbar, then settles', () => {
@@ -133,7 +133,7 @@ describe('channel', () => {
     channel.scan()
     host = document.querySelector('[data-infographic-host]') as HTMLElement
     expect(host.dataset.state).toBe('settled')
-    expect(host.querySelectorAll('.dsh-ig-bar button')).toHaveLength(6)
+    expect(host.querySelectorAll('.dsh-ig-bar button')).toHaveLength(5)
     expect(document.querySelectorAll('[data-infographic-host]')).toHaveLength(1)
   })
 
@@ -378,32 +378,10 @@ describe('copy png', () => {
   })
 })
 
-describe('settings panel', () => {
-  it('toggles settings panel and updates frequency and default style', () => {
-    document.body.innerHTML = row(block('infographic', BAR))
-    channel = installFenceChannel({ locale: 'en', storage: asStorage(store) })
-    const host = document.querySelector('[data-infographic-host]') as HTMLElement
-    const settingsBtn = buttonNamed('⚙️ Settings')
-    const panel = host.querySelector('.dsh-ig-settings-panel') as HTMLElement
-
-    expect(panel.hidden).toBe(true)
-    settingsBtn?.click()
-    expect(panel.hidden).toBe(false)
-    expect(panel.textContent).toContain('Infographic Settings')
-    expect(panel.textContent).toContain('Drawing Frequency')
-
-    // Click 'High' frequency card
-    const highBtn = [...panel.querySelectorAll('.dsh-ig-freq-card')].find(c => c.textContent?.includes('High')) as HTMLElement
-    highBtn?.click()
-    expect(store.getItem('dsh-infographic:frequency')).toBe('high')
-    expect(panel.querySelector('.dsh-ig-freq-card.active')?.textContent).toContain('High')
-
-    // Switch default style via panel select
-    const panelSelect = panel.querySelector('select.dsh-ig-style') as HTMLSelectElement
-    panelSelect.value = 'economist'
-    panelSelect.dispatchEvent(new Event('change'))
-    expect(store.getItem(STYLE_STORAGE_KEY)).toBe('economist')
-    expect(host.dataset.style).toBe('economist')
+describe('settings section', () => {
+  it('creates a settings panel factory for DSH settings slot', () => {
+    const Panel = createSettingsPanel({ locale: { getLocale: () => ({ active: 'zh' }) } })
+    expect(typeof Panel).toBe('function')
   })
 })
 
