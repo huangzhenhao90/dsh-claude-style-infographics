@@ -113,7 +113,7 @@ describe('renderSvg', () => {
   })
 
   it('wraps long card text and grows the card instead of truncating', () => {
-    const note = '每人先接受机器人主持的访谈，再接受人类主持的访谈（交叉设计），全程录音转写后逐轮编码，并由两位研究者独立复核'
+    const note = '每人先接受机器人主持的访谈，再接受人类主持的访谈（交叉设计），全程录音转写后逐轮编码，并由两位研究者独立复核全部编码结果；出现分歧时通过讨论达成一致，必要时请第三位研究者仲裁'
     const svg = renderInfographic({ infographic: 'cards', items: [{ label: '参与者', value: '15', note }, { label: 'b', value: '2' }] })
     expect(svg).not.toContain('…')
     const heights = [...svg.matchAll(/<rect class="ig-card" [^>]*height="([\d.]+)"/g)].map(m => Number(m[1]))

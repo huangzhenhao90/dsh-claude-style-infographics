@@ -287,12 +287,12 @@ function cards(source: Obj, warnings: string[]): CardsSpec {
   const items: CardItem[] = []
   for (const entry of list(pick(source, 'items', 'cards', 'metrics'), LIMITS.cards, 'cards', warnings)) {
     if (!isObj(entry)) continue
-    const label = text(pick(entry, 'label', 'name', 'title'), 40)
-    const value = text(pick(entry, 'value', 'v'), 18)
+    const label = text(pick(entry, 'label', 'name', 'title'), 60)
+    const value = text(pick(entry, 'value', 'v'), 24)
     if (label === undefined || value === undefined) continue
     const item: CardItem = { label, value }
-    const delta = text(entry.delta, 14)
-    const note = text(pick(entry, 'note', 'desc', 'sub'), 60)
+    const delta = text(entry.delta, 30)
+    const note = text(pick(entry, 'note', 'desc', 'sub'), 120)
     if (delta !== undefined) item.delta = delta
     if (note !== undefined) item.note = note
     const color = pick(entry, 'color', 'tone', 'ramp')

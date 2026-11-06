@@ -1,5 +1,5 @@
 import type { CardsSpec } from '../types.ts'
-import { esc, wrap } from '../text.ts'
+import { esc, measure, wrap } from '../text.ts'
 import { CONTENT_WIDTH, MARGIN_X, rect, textBlock, type Piece } from './common.ts'
 
 const GAP = 12
@@ -40,13 +40,48 @@ function layoutCard(item: CardsSpec['items'][number], inner: number): Layout {
   return { label, value, delta, note, labelY, valueY, deltaY, noteY, height: last + (note.length > 0 ? 14 : 16) }
 }
 
+/** Width a card would like if nothing were competing for space (notes are capped so they wrap instead of hogging a row). */
+function desiredWidth(item: CardsSpec['items'][number]): number {
+  const lines = [
+    measure(item.label, 12),
+    measure(item.value, 26, 500),
+    item.delta === undefined ? 0 : measure(item.delta, 12, 500),
+    item.note === undefined ? 0 : Math.min(measure(item.note, 11), 150),
+  ]
+  return Math.max(...lines) + 28
+}
+
+/** Share `available` px between the cards of one row in proportion to what they want, never below `floor`. */
+function rowWidths(wants: readonly number[], available: number, floor: number): number[] {
+  const widths = wants.map(() => 0)
+  let open = wants.map((_, index) => index)
+  let room = available
+  while (open.length > 0) {
+    const total = open.reduce((sum, index) => sum + (wants[index] as number), 0)
+    const clamped = open.filter(index => (room * (wants[index] as number)) / total < floor)
+    if (clamped.length === 0) {
+      for (const index of open) widths[index] = (room * (wants[index] as number)) / total
+      break
+    }
+    for (const index of clamped) widths[index] = floor
+    room -= floor * clamped.length
+    open = open.filter(index => !clamped.includes(index))
+  }
+  return widths
+}
+
 export function renderCards(spec: CardsSpec, top: number, _prefix: string): Piece {
   const count = spec.items.length
   const columns = count <= 4 ? count : count <= 6 ? 3 : 4
-  const width = (CONTENT_WIDTH - GAP * (columns - 1)) / columns
-  const inner = width - 28
+  const equal = (CONTENT_WIDTH - GAP * (columns - 1)) / columns
   const minHeight = spec.items.some(item => item.note !== undefined) ? 104 : 86
-  const layouts = spec.items.map(item => layoutCard(item, inner))
+  const widths: number[] = []
+  for (let start = 0; start < count; start += columns) {
+    const items = spec.items.slice(start, start + columns)
+    const available = CONTENT_WIDTH - GAP * (items.length - 1)
+    widths.push(...rowWidths(items.map(desiredWidth), available, Math.min(equal, 120) * 0.85))
+  }
+  const layouts = spec.items.map((item, index) => layoutCard(item, (widths[index] as number) - 28))
   const rowHeights: number[] = []
   layouts.forEach((layout, index) => {
     const row = Math.floor(index / columns)
@@ -63,7 +98,9 @@ export function renderCards(spec: CardsSpec, top: number, _prefix: string): Piec
     const column = index % columns
     const row = Math.floor(index / columns)
     const layout = layouts[index] as Layout
-    const x = MARGIN_X + column * (width + GAP)
+    const width = widths[index] as number
+    let x = MARGIN_X
+    for (let c = 0; c < column; c++) x += (widths[index - column + c] as number) + GAP
     const y = rowTops[row] as number
     const height = rowHeights[row] as number
     const colored = item.color !== undefined

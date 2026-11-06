@@ -37,7 +37,7 @@ description: "Draw a clean, Claude-artifact-style infographic inline in the repl
 
 调色名（`color`）：`purple` `teal` `coral` `pink` `gray` `blue` `green` `amber` `red`。颜色表示类别，不表示好坏；不写则按顺序自动配色。**调色名是「槽位」，不是色相承诺**——`blue` 在 `claude` 下是青蓝，在 `bcg` 下是深绿（BCG 的视觉语言里没有蓝色）。三套品牌风格是近单色的：自动配色只在品牌自己的色相家族里走深浅。只有 `red`/`green`/`amber` 在四套风格里语义固定，涨跌色和告警色不会说谎。换风格不用改 JSON。
 
-长度上限：单段文字约 160 字；`flow` 40 个节点、80 条边；`bar`/`line` 24 个类别、6 个系列；`donut` 12 块；`cards` 12 张；`timeline` 16 项；`layers` 8 层、每层 8 项。超出部分会被丢弃，并在图下方提示「已自动修正」。
+长度上限：单段文字约 160 字；`flow` 40 个节点、80 条边；`bar`/`line` 24 个类别、6 个系列；`donut` 12 块；`cards` 12 张（每张：标签约 60 字、数值约 24 字、涨跌幅约 30 字、说明约 120 字，长文字会自动换行、卡片自动撑高）；`timeline` 16 项；`layers` 8 层、每层 8 项。超出部分会被丢弃，并在图下方提示「已自动修正」。
 
 ## 七种图
 
