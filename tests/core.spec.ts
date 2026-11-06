@@ -112,6 +112,33 @@ describe('renderSvg', () => {
     expect(svg).toContain('&lt;img')
   })
 
+  it('keeps long flow-node text whole instead of ellipsizing it', () => {
+    const leaf = (id: string, label: string, sub: string) => ({ id, label, sub })
+    const svg = renderInfographic({
+      infographic: 'flow',
+      direction: 'down',
+      nodes: [
+        { id: 'r', label: 'LLM 实时检测', sub: '叠加轻量语义分类器给的对话上下文做判断', shape: 'diamond' },
+        leaf('a', 'Treatment 1：确认探针', 'confirmation probe'),
+        leaf('b', 'Treatment 2：细化 / 相关性探针', 'elaboration & relevance probe'),
+        leaf('c', '相关但不具体 → 细化探针', 'You mentioned [concept]. Could you tell me more?'),
+        leaf('d', '不相关 → 相关性探针', "I didn't understand how [concept] relates to the question."),
+        leaf('e', '具体且相关 → 不追问', '直接进下一题'),
+      ],
+      edges: [['r', 'a'], ['r', 'b'], ['b', 'c'], ['b', 'd'], ['b', 'e']].map(([from, to]) => ({ from: from as string, to: to as string })),
+    } as never)
+    expect(svg).toContain('<svg')
+    expect(svg).toContain('confirmation probe')
+    expect(svg).not.toContain('…')
+  })
+
+  it('never starts a wrapped line with closing punctuation', async () => {
+    const { wrap } = await import('../src/core/text.ts')
+    for (const width of [60, 80, 100, 120]) {
+      for (const line of wrap('Treatment 1：确认探针，细化；相关性探针。是吗？', width, 14, 500, 9)) expect(line).not.toMatch(/^[：，；。？]/u)
+    }
+  })
+
   it('wraps long card text and grows the card instead of truncating', () => {
     const note = '每人先接受机器人主持的访谈，再接受人类主持的访谈（交叉设计），全程录音转写后逐轮编码，并由两位研究者独立复核全部编码结果；出现分歧时通过讨论达成一致，必要时请第三位研究者仲裁'
     const svg = renderInfographic({ infographic: 'cards', items: [{ label: '参与者', value: '15', note }, { label: 'b', value: '2' }] })

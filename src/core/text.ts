@@ -48,9 +48,17 @@ export function ellipsize(text: string, width: number, size: number, weight = 40
   return `${chars.join('').trimEnd()}…`
 }
 
+const NO_LINE_START = /^[，。、：；！？）」』》】〉…,.:;!?)\]}%]/u
+
 /** Greedy wrap into at most `maxLines` lines no wider than `width`; the last line is ellipsized. */
 export function wrap(text: string, width: number, size: number, weight = 400, maxLines = 3): string[] {
-  const tokens = text.match(/[\u2e80-\u9fff\uac00-\ud7a3\uff00-\uffef]|[^\s\u2e80-\u9fff\uac00-\ud7a3\uff00-\uffef]+\s*|\s+/g) ?? []
+  const raw = text.match(/[\u2e80-\u9fff\uac00-\ud7a3\uff00-\uffef]|[^\s\u2e80-\u9fff\uac00-\ud7a3\uff00-\uffef]+\s*|\s+/g) ?? []
+  // Closing punctuation must not start a line: glue it to the character before it.
+  const tokens: string[] = []
+  for (const token of raw) {
+    if (tokens.length > 0 && NO_LINE_START.test(token)) tokens[tokens.length - 1] += token
+    else tokens.push(token)
+  }
   const lines: string[] = []
   let current = ''
   for (const token of tokens) {

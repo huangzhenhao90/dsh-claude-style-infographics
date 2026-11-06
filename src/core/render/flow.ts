@@ -6,7 +6,9 @@ const LABEL_SIZE = 14
 const SUB_SIZE = 12
 const LABEL_LINE = 18
 const SUB_LINE = 16
-const WIDTH_STEPS = [220, 180, 150, 120, 96]
+const WIDTH_STEPS = [220, 180, 150, 120]
+/** Wrapped text may run this many lines before it is ellipsized; cutting content is the last resort. */
+const MAX_LINES = 7
 
 interface Box {
   node: FlowNode
@@ -34,16 +36,18 @@ interface Chain {
 
 function measureBox(node: FlowNode, maxWidth: number): Box {
   const diamond = node.shape === 'diamond'
-  const inner = diamond ? Math.max(70, maxWidth * 0.6) : maxWidth - 32
-  const labelLines = wrap(node.label, inner, LABEL_SIZE, 500, 3)
-  const subLines = node.sub === undefined ? [] : wrap(node.sub, inner, SUB_SIZE, 400, 3)
+  // A diamond wastes its corners, so it gets a wider allowance than a plain box to keep its text readable.
+  const limit = diamond ? maxWidth * 1.4 : maxWidth
+  const inner = diamond ? Math.max(90, limit * 0.6) : limit - 32
+  const labelLines = wrap(node.label, inner, LABEL_SIZE, 500, MAX_LINES)
+  const subLines = node.sub === undefined ? [] : wrap(node.sub, inner, SUB_SIZE, 400, MAX_LINES)
   const textWidth = Math.max(
     ...labelLines.map(entry => measure(entry, LABEL_SIZE, 500)),
     ...subLines.map(entry => measure(entry, SUB_SIZE, 400)),
   )
   const textHeight = labelLines.length * LABEL_LINE + (subLines.length > 0 ? subLines.length * SUB_LINE + 2 : 0)
   if (diamond) {
-    const w = Math.min(maxWidth, Math.max(96, textWidth * 1.55 + 24))
+    const w = Math.min(limit, Math.max(96, textWidth * 1.55 + 24))
     return { node, w, h: Math.max(60, textHeight * 1.6 + 20), labelLines, subLines }
   }
   const w = Math.min(maxWidth, Math.max(88, textWidth + 32 + (node.shape === 'pill' ? 8 : 0)))
@@ -359,6 +363,7 @@ export function renderFlow(spec: FlowSpec, top: number, prefix: string): Piece {
     const width = right ? layout.mainExtent : layout.crossExtent
     if (width <= CONTENT_WIDTH) break
   }
+  // Still too wide at the narrowest step: the whole drawing is scaled down below instead of squeezing text further.
   const width = right ? layout.mainExtent : layout.crossExtent
   const height = right ? layout.crossExtent : layout.mainExtent
   const scale = width > CONTENT_WIDTH ? CONTENT_WIDTH / width : 1
