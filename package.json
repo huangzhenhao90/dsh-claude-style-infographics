@@ -16,6 +16,10 @@
       "types": "./lib/types/core/index.d.ts",
       "default": "./lib/core.js"
     },
+    "./client": {
+      "types": "./lib/types/client/index.d.ts",
+      "default": "./lib/client.js"
+    },
     "./global": "./lib/infographic.global.js",
     "./skill": "./dsh/SKILL.md",
     "./package.json": "./package.json"
