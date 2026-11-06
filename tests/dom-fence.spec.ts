@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { detectLocale } from '../src/client/i18n.ts'
 import { STYLE_STORAGE_KEY, createSettingsPanel, detectTheme, findInfographicBlocks, installFenceChannel, isPlausibleSurface, type Channel } from '../src/client/index.ts'
 import { normalizeSpec, renderSvg } from '../src/core/index.ts'
 import type { StyleName } from '../src/core/palettes.ts'
@@ -117,7 +118,7 @@ describe('channel', () => {
     expect(host?.nextElementSibling).toBe(document.querySelector('.md-code-block'))
     expect(document.body.textContent).toContain('before')
     expect(document.body.textContent).toContain('after')
-    expect([...host?.querySelectorAll('.dsh-ig-bar button') ?? []].map(button => button.textContent)).toEqual(['Copy PNG', 'Download PNG', 'Copy SVG', 'Download SVG', 'Source'])
+    expect([...host?.querySelectorAll('.dsh-ig-bar button') ?? []].map(button => button.textContent)).toEqual(['Copy PNG', 'Download PNG'])
   })
 
   it('renders progressively while streaming, without a toolbar, then settles', () => {
@@ -133,7 +134,7 @@ describe('channel', () => {
     channel.scan()
     host = document.querySelector('[data-infographic-host]') as HTMLElement
     expect(host.dataset.state).toBe('settled')
-    expect(host.querySelectorAll('.dsh-ig-bar button')).toHaveLength(5)
+    expect(host.querySelectorAll('.dsh-ig-bar button')).toHaveLength(2)
     expect(document.querySelectorAll('[data-infographic-host]')).toHaveLength(1)
   })
 
@@ -201,38 +202,17 @@ describe('channel', () => {
     expect(document.querySelector('[data-infographic-host] svg')?.getAttribute('data-theme')).toBe('dark')
   })
 
-  it('exports a standalone svg through the download button', async () => {
-    document.body.innerHTML = row(block('infographic', BAR))
-    const created: Blob[] = []
-    URL.createObjectURL = vi.fn((blob: Blob | MediaSource) => {
-      created.push(blob as Blob)
-      return 'blob:test'
-    })
-    URL.revokeObjectURL = vi.fn()
-    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
-    channel = installFenceChannel({ locale: 'en' })
-    const buttons = [...document.querySelectorAll<HTMLButtonElement>('[data-infographic-host] .dsh-ig-bar button')]
-    buttons.find(button => button.textContent === 'Download SVG')?.click()
-    await wait(10)
-    expect(created).toHaveLength(1)
-    const text = await new Promise<string>(resolve => {
-      const reader = new FileReader()
-      reader.onload = () => resolve(String(reader.result))
-      reader.readAsText(created[0] as Blob)
-    })
-    expect(text).toMatch(/^<\?xml/)
-    expect(text).toContain('width="680"')
-  })
-
-  it('toggles the source view', () => {
-    document.body.innerHTML = row(block('infographic', BAR))
-    channel = installFenceChannel({ locale: 'en' })
-    const source = document.querySelector('.dsh-ig-source') as HTMLElement
-    expect(source.hidden).toBe(true)
-    const toggle = [...document.querySelectorAll<HTMLButtonElement>('.dsh-ig-bar button')].find(button => button.textContent === 'Source')
-    toggle?.click()
-    expect(source.hidden).toBe(false)
-    expect(source.textContent).toBe(BAR)
+  it('defaults to Chinese labels unless the UI is explicitly English', () => {
+    expect(detectLocale(document.implementation.createHTMLDocument(''))).toBe(navigator.language.toLowerCase().startsWith('en') ? 'en' : 'zh')
+    const zh = document.implementation.createHTMLDocument('')
+    zh.documentElement.lang = 'zh-CN'
+    expect(detectLocale(zh)).toBe('zh')
+    const fr = document.implementation.createHTMLDocument('')
+    fr.documentElement.lang = 'fr'
+    expect(detectLocale(fr)).toBe('zh')
+    const en = document.implementation.createHTMLDocument('')
+    en.documentElement.lang = 'en-US'
+    expect(detectLocale(en)).toBe('en')
   })
 
   it('removes everything on dispose and restores the host block', () => {

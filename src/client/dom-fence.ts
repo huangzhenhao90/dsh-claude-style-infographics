@@ -10,7 +10,7 @@
 import { looksLikeInfographic, readFence, renderSvg } from '../core/index.ts'
 import type { InfographicSpec } from '../core/index.ts'
 import { DEFAULT_STYLE, STYLES, isStyle, type StyleName } from '../core/palettes.ts'
-import { copyPng, copyText, download, exportSvg, fileStem, svgToPngBlob, withStyle } from './export.ts'
+import { copyPng, download, fileStem, svgToPngBlob, withStyle } from './export.ts'
 import { detectLocale, label, styleLabel, type LabelKey, type Locale } from './i18n.ts'
 import { CSS, STYLE_ID } from './styles.ts'
 
@@ -152,7 +152,6 @@ interface Mount {
   container: HTMLElement
   stage: HTMLElement
   bar: HTMLElement
-  source: HTMLElement
   prefix: string
   key: string
   spec: InfographicSpec | null
@@ -326,13 +325,6 @@ export function installFenceChannel(options: ChannelOptions = {}): Channel {
     mount.bar.append(
       button(text('copyPng'), self => guarded(self, () => copyPng(spec, theme(), style(), doc), text('copied'))),
       button(text('downloadPng'), self => guarded(self, async () => download(`${stem}.png`, await svgToPngBlob(spec, theme(), style(), doc), doc))),
-      button(text('copySvg'), self => guarded(self, () => copyText(exportSvg(spec, theme(), style()), doc), text('copied'))),
-      button(text('downloadSvg'), self => guarded(self, () => download(`${stem}.svg`, new Blob([exportSvg(spec, theme(), style())], { type: 'image/svg+xml' }), doc))),
-      button(text('source'), self => {
-        const open = mount.source.hidden
-        mount.source.hidden = !open
-        self.textContent = open ? text('hideSource') : text('source')
-      }),
       styleSelect(),
     )
   }
@@ -354,11 +346,8 @@ export function installFenceChannel(options: ChannelOptions = {}): Channel {
     stage.className = 'dsh-ig-stage'
     const bar = doc.createElement('div')
     bar.className = 'dsh-ig-bar'
-    const source = doc.createElement('pre')
-    source.className = 'dsh-ig-source'
-    source.hidden = true
-    container.append(stage, bar, source)
-    const mount: Mount = { block, container, stage, bar, source, prefix: `ig-${counter}`, key: '', spec: null, theme: 'light' }
+    container.append(stage, bar)
+    const mount: Mount = { block, container, stage, bar, prefix: `ig-${counter}`, key: '', spec: null, theme: 'light' }
     insertBefore(block, container)
     block.style.display = 'none'
     block.setAttribute(TAKEN_ATTR, '')
@@ -420,7 +409,6 @@ export function installFenceChannel(options: ChannelOptions = {}): Channel {
     mount.key = key
     mount.spec = result.spec
     paint(mount, result.spec)
-    mount.source.textContent = raw
     mount.container.dataset.infographic = result.spec.infographic
     mount.container.dataset.state = settled ? 'settled' : 'streaming'
     mount.bar.replaceChildren()

@@ -6,8 +6,6 @@ const LABELS = {
   zh: {
     copyPng: '复制 PNG',
     downloadPng: '下载 PNG',
-    copySvg: '复制 SVG',
-    downloadSvg: '下载 SVG',
     style: '风格',
     styleClaude: 'Claude 默认',
     styleMckinsey: '麦肯锡',
@@ -24,8 +22,6 @@ const LABELS = {
     settingsFreqLowDesc: '文字优先，仅在明确提问时画',
     settingsDefaultStyle: '全局默认风格',
     settingsSaved: '已生效',
-    source: '源码',
-    hideSource: '收起源码',
     copied: '已复制',
     failed: '失败',
     diagnostic: '信息图无法渲染',
@@ -39,8 +35,6 @@ const LABELS = {
   en: {
     copyPng: 'Copy PNG',
     downloadPng: 'Download PNG',
-    copySvg: 'Copy SVG',
-    downloadSvg: 'Download SVG',
     style: 'Style',
     styleClaude: 'Claude (default)',
     styleMckinsey: 'McKinsey',
@@ -57,8 +51,6 @@ const LABELS = {
     settingsFreqLowDesc: 'Text-first, on request only',
     settingsDefaultStyle: 'Default Visual Style',
     settingsSaved: 'Saved',
-    source: 'Source',
-    hideSource: 'Hide source',
     copied: 'Copied',
     failed: 'Failed',
     diagnostic: 'Infographic could not be rendered',
@@ -75,7 +67,8 @@ export type LabelKey = keyof (typeof LABELS)['zh']
 
 export function detectLocale(doc: Document = document): Locale {
   const tag = (doc.documentElement.lang || (typeof navigator === 'undefined' ? '' : navigator.language) || '').toLowerCase()
-  return tag.startsWith('zh') ? 'zh' : 'en'
+  // Chinese is the default; only an explicitly English UI gets English labels.
+  return tag.startsWith('en') ? 'en' : 'zh'
 }
 
 export function label(locale: Locale, key: LabelKey): string {
