@@ -1,0 +1,5 @@
+{"infographic":"layers","title":"RAG 应用的分层架构","arrows":true,
+ "layers":[
+  {"label":"接入层","color":"purple","items":[{"label":"Web 前端","sub":"聊天界面"},{"label":"API 网关","sub":"鉴权与限流"}]},
+  {"label":"服务层","color":"teal","items":[{"label":"检索服务","sub":"向量 + 关键词"},{"label":"重排序"},{"label":"生成服务","sub":"调用大模型"}]},
+  {"label":"数据层","color":"coral","items":[{"label":"向量库"},{"label":"文档存储"},{"label":"日志"}]}]}

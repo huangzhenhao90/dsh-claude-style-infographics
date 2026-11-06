@@ -1,0 +1,3 @@
+{"infographic":"bar","title":"各产品线季度营收","unit":"M","categories":["Q1","Q2","Q3","Q4"],
+ "series":[{"name":"订阅","data":[38,42,47,55],"color":"purple"},{"name":"服务","data":[27,31,29,36],"color":"teal"},{"name":"硬件","data":[18,16,21,24],"color":"coral"}],
+ "note":"数据为示例，单位：百万元"}

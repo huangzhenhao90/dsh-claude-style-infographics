@@ -1,0 +1,3 @@
+{"infographic":"flow","title":"Agent loop","direction":"right",
+ "nodes":[{"id":"p","label":"Plan","sub":"decide next step"},{"id":"a","label":"Act","sub":"call a tool","color":"coral"},{"id":"o","label":"Observe","sub":"read the result","color":"blue"},{"id":"d","label":"Done?","shape":"diamond"},{"id":"r","label":"Answer","shape":"pill","color":"green"}],
+ "edges":[["p","a"],["a","o"],["o","d"],{"from":"d","to":"r","label":"yes"},{"from":"d","to":"p","label":"no","dashed":true}]}

@@ -1,0 +1,88 @@
+{
+  "name": "@huangzhenhao90/dsh-infographic",
+  "description": "Claude-artifact-style infographics rendered inline in DeepSeek Harness (DSH) replies via the ```infographic fence: flowcharts, bar/line/donut charts, metric cards, timelines and layer diagrams, with SVG/PNG export.",
+  "version": "0.1.0",
+  "license": "MIT",
+  "private": true,
+  "type": "module",
+  "main": "lib/index.js",
+  "types": "lib/types/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/types/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./core": {
+      "types": "./lib/types/core/index.d.ts",
+      "default": "./lib/core.js"
+    },
+    "./global": "./lib/infographic.global.js",
+    "./skill": "./dsh/SKILL.md",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "dsh",
+    "skill",
+    "examples",
+    "cordis.patch.yml",
+    "README.md",
+    "THIRD_PARTY_NOTICES.md"
+  ],
+  "keywords": [
+    "dsh",
+    "deepseek-harness",
+    "generative-ui",
+    "infographic",
+    "svg",
+    "charts"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/huangzhenhao90/claude-infographic-charts.git"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "^4.0.1",
+    "@deepseek-ai/dsh-skill": "^0.2.0-rc.1 || ^0.2.1-rc.1",
+    "@deepseek-ai/dsh-system-prompt": "^0.2.0-rc.1 || ^0.2.1-rc.1"
+  },
+  "peerDependenciesMeta": {
+    "@deepseek-ai/cordis": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh-skill": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh-system-prompt": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@deepseek-ai/cordis": "4.0.2",
+    "@deepseek-ai/dsh-skill": "0.2.1-rc.3",
+    "@deepseek-ai/dsh-system-prompt": "0.2.1-rc.3",
+    "@types/node": "^22.19.0",
+    "jsdom": "^25.0.0",
+    "tsdown": "^0.22.2",
+    "typescript": "^5.6.0",
+    "vitest": "^3.0.0"
+  },
+  "scripts": {
+    "build": "node scripts/clean.mjs && tsc -p tsconfig.json && tsdown",
+    "test": "vitest run",
+    "examples": "node scripts/render-examples.mjs",
+    "check": "node scripts/clean.mjs && tsc -p tsconfig.json && vitest run && tsdown && node scripts/verify-bundle.mjs && node scripts/render-examples.mjs --check"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "inject": [],
+      "platform": "web"
+    }
+  },
+  "engines": {
+    "node": "^22.19.0 || >=24.0.0"
+  }
+}

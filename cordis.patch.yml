@@ -1,0 +1,7 @@
+# Inserted into the profile's composition when this plugin is installed:
+#   dsh plugin --profile web add link:/path/to/claude-infographic-charts
+# The node half teaches the model the ```infographic fence and ships the bundled skill;
+# the client half (lib/client.js) renders the fence in the conversation.
+- insert:
+    - id: infographic
+      name: '@huangzhenhao90/dsh-infographic'

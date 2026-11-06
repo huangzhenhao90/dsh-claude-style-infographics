@@ -1,0 +1,2 @@
+{"infographic":"timeline","title":"产品发布节奏",
+ "items":[{"time":"9 月","title":"内部灰度","desc":"20 名种子用户，重点验证核心流程是否跑得通","color":"purple"},{"time":"10 月","title":"公开测试","desc":"开放排队注册，收集反馈并修复前 30 个高频问题","color":"teal"},{"time":"11 月","title":"正式发布","desc":"上线付费版本和团队协作功能","color":"coral"},{"time":"12 月","title":"开放 API","color":"blue"}]}

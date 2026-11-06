@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>DSH host fixture</title>
+<style>
+  body{font:15px/1.6 system-ui,-apple-system,'PingFang SC',sans-serif;margin:24px;max-width:760px;color:#222;background:#fff}
+  body.dark{color:#e8e8e6;background:#1f1f1e}
+  .md-code-block{border:1px solid #ccc;border-radius:8px;margin:8px 0;overflow:hidden}
+  .md-code-block [data-code-block-banner]{padding:4px 10px;background:#f3f3f3;font-size:12px}
+  .md-code-block pre{margin:0;padding:10px;overflow:auto}
+</style>
+</head>
+<body>
+<div id="row-settled" data-chat-flow-kind="assistant-step">
+  <p>下面是请求流程：</p>
+  <div class="md-code-block"><div data-code-block-banner><span>infographic</span></div><pre><code id="settled-code"></code></pre></div>
+  <p>图后面的文字照常显示。</p>
+  <div class="md-code-block"><div data-code-block-banner><span>python</span></div><pre><code>print("untouched")</code></pre></div>
+</div>
+<div id="row-stream" data-chat-flow-kind="assistant-step" data-streaming>
+  <p>流式输出中：</p>
+  <div class="md-code-block" id="stream-block"><div data-code-block-banner><span></span></div><pre><code id="stream-code"></code></pre></div>
+</div>
+<div id="row-bad" data-chat-flow-kind="assistant-step">
+  <div class="md-code-block" id="bad-block"><div data-code-block-banner><span>infographic</span></div><pre><code>{"infographic":"flow","nodes":</code></pre></div>
+</div>
+<div id="row-container" data-chat-flow-kind="assistant-step">
+  <div class="code-block" id="container-block"><p>这是整条消息容器，不是围栏。</p><pre><code>{"infographic":"bar","categories":["a"],"series":[{"name":"s","data":[1]}]}</code></pre></div>
+</div>
+<pre id="result"></pre>
+<script src="../../lib/infographic.global.js"></script>
+<script>
+const settled = {"infographic":"flow","title":"一次 API 请求","direction":"down","nodes":[{"id":"a","label":"提交","shape":"pill"},{"id":"b","label":"校验","shape":"diamond"},{"id":"c","label":"完成","shape":"pill","color":"green"}],"edges":[["a","b"],{"from":"b","to":"c","label":"通过"},{"from":"b","to":"a","label":"重试","dashed":true}]}
+document.getElementById('settled-code').textContent = JSON.stringify(settled)
+const stages = [
+  '{"infographic":"bar","title":"流式柱状图","categories":["Q1","Q2","Q3"],"series":[{"name":"营收","data":[12,18',
+  '{"infographic":"bar","title":"流式柱状图","categories":["Q1","Q2","Q3"],"series":[{"name":"营收","data":[12,18,25]}]',
+  '{"infographic":"bar","title":"流式柱状图","categories":["Q1","Q2","Q3"],"series":[{"name":"营收","data":[12,18,25]}],"note":"完成"}',
+]
+const log = []
+const snap = label => {
+  const host = document.querySelector('#row-stream [data-infographic-host]')
+  log.push({ label, host: host !== null, state: host && host.dataset.state, bars: host ? host.querySelectorAll('rect.ig-mark, rect[class*=mark]').length : 0, blockHidden: document.getElementById('stream-block').style.display === 'none', toolbar: host ? host.querySelectorAll('.dsh-ig-bar button').length : 0 })
+}
+const channel = window.DshInfographic.installFenceChannel({ sweepMs: 200 })
+let step = 0
+const timer = setInterval(() => {
+  if (step < stages.length) {
+    document.getElementById('stream-code').textContent = stages[step]
+    step += 1
+    setTimeout(() => snap('stage' + step), 160)
+  } else {
+    clearInterval(timer)
+    document.getElementById('row-stream').removeAttribute('data-streaming')
+    setTimeout(async () => {
+      snap('settled')
+      const settledHost = document.querySelector('#row-settled [data-infographic-host]')
+      const svg = settledHost && settledHost.querySelector('svg')
+      const wipe = document.querySelector('#row-settled [data-infographic-host]')
+      wipe && wipe.remove()
+      await new Promise(resolve => setTimeout(resolve, 400))
+      const repaired = document.querySelector('#row-settled [data-infographic-host] svg') !== null
+      document.body.classList.add('dark')
+      await new Promise(resolve => setTimeout(resolve, 1300))
+      const themeAfterDark = document.querySelector('#row-settled [data-infographic-host] svg').getAttribute('data-theme')
+      let png = null
+      try {
+        const blob = await window.DshInfographic.svgToPngBlob(window.DshInfographic.readFence(document.getElementById('settled-code').textContent).spec, 'light')
+        const bytes = new Uint8Array(await blob.arrayBuffer())
+        const view = new DataView(bytes.buffer)
+        png = { size: blob.size, magic: Array.from(bytes.slice(1, 4)).map(c => String.fromCharCode(c)).join(''), width: view.getUint32(16), height: view.getUint32(20) }
+      } catch (error) { png = { error: String(error) } }
+      const result = {
+        log,
+        settledHostCount: document.querySelectorAll('#row-settled [data-infographic-host]').length,
+        settledText: document.getElementById('row-settled').innerText.includes('图后面的文字照常显示'),
+        pythonVisible: getComputedStyle(document.querySelector('#row-settled .md-code-block:last-of-type')).display !== 'none',
+        repaired,
+        themeAfterDark,
+        diagnostic: document.querySelectorAll('[data-infographic-diagnostic]').length,
+        badBlockVisible: document.getElementById('bad-block').style.display !== 'none',
+        containerUntouched: document.getElementById('container-block').style.display !== 'none' && document.querySelectorAll('#row-container [data-infographic-host]').length === 0,
+        buttons: Array.from(document.querySelectorAll('#row-settled .dsh-ig-bar button')).map(b => b.textContent),
+        png,
+      }
+      document.getElementById('result').textContent = JSON.stringify(result)
+      document.title = 'done'
+    }, 400)
+  }
+}, 300)
+</script>
+</body>
+</html>

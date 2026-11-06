@@ -1,0 +1,9 @@
+{"infographic":"flow","title":"一次 API 请求的处理流程","subtitle":"校验失败直接返回，成功才进入业务逻辑","direction":"down",
+ "nodes":[
+  {"id":"req","label":"用户提交请求","sub":"API 或网页表单","shape":"pill","color":"purple"},
+  {"id":"auth","label":"身份认证","sub":"校验令牌与权限","color":"teal"},
+  {"id":"ok","label":"输入合法？","shape":"diamond","color":"amber"},
+  {"id":"run","label":"执行业务逻辑","sub":"读写数据库","color":"teal"},
+  {"id":"err","label":"返回错误","sub":"400 + 原因","color":"red"},
+  {"id":"done","label":"返回结果","shape":"pill","color":"green"}],
+ "edges":[["req","auth"],["auth","ok"],{"from":"ok","to":"run","label":"是"},{"from":"ok","to":"err","label":"否"},["run","done"],["err","done"]]}

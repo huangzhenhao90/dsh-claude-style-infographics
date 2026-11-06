@@ -1,0 +1,2 @@
+{"infographic":"line","title":"周活跃用户","subtitle":"过去 8 周","categories":["W1","W2","W3","W4","W5","W6","W7","W8"],"area":true,
+ "series":[{"name":"新用户","data":[120,150,170,160,210,260,310,360],"color":"purple"},{"name":"回访用户","data":[80,95,120,150,155,190,200,240],"color":"teal"}]}
