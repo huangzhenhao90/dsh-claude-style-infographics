@@ -6,11 +6,7 @@
 import { installFenceChannel } from './dom-fence.ts'
 import { createSettingsPanel } from './settings-panel.ts'
 
-export const inject: string[] = [
-  '@deepseek-ai/dsh-client-ui-renderer',
-  '@deepseek-ai/dsh-client-locale',
-  '@deepseek-ai/dsh-client-ui-settings',
-]
+export const inject: string[] = ['slots', 'locale']
 
 export function apply(ctx?: any): () => void {
   if (typeof document === 'undefined') return () => {}

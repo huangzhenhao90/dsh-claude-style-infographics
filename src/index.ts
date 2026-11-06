@@ -123,6 +123,27 @@ export function apply(ctx: Context, initialConfig?: PluginConfig): void {
           },
           additionalProperties: false,
         },
+        output: {
+          schema: {
+            type: 'object',
+            properties: {
+              ok: { type: 'boolean' },
+              message: { type: 'string' },
+              config: {
+                type: 'object',
+                properties: {
+                  frequency: { type: 'string' },
+                  defaultStyle: { type: 'string' },
+                },
+              },
+            },
+            required: ['ok', 'message'],
+          },
+          render: (_args: any, value: any) => [{
+            type: 'text',
+            text: value?.message ?? JSON.stringify(value),
+          }],
+        },
         execute: async (args: { patch?: { frequency?: string; defaultStyle?: string } }) => {
           if (args?.patch) {
             const patch: Partial<InfographicConfig> = {}
@@ -145,7 +166,7 @@ export function apply(ctx: Context, initialConfig?: PluginConfig): void {
         },
       })
     } catch (err) {
-      console.warn('[infographic] failed to register config tool', err)
+      console.error('[infographic] failed to register config tool', err)
     }
   })
 
