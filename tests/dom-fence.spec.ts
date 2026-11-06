@@ -215,13 +215,18 @@ describe('channel', () => {
     expect(detectLocale(en)).toBe('en')
   })
 
-  it('still picks up a block whose text becomes an infographic after being skipped', () => {
-    document.body.innerHTML = '<div class="msg"><div class="tool"><pre>plain output</pre></div></div>'
+  it('quick scans cover known code surfaces; the sweep also finds bare pre blocks', () => {
+    document.body.innerHTML = row(block('python', 'print(1)')) + '<div class="msg"><div class="tool"><pre>plain output</pre></div></div>'
     channel = installFenceChannel({ locale: 'en', sweepMs: 100000 })
     expect(document.querySelector('[data-infographic-host]')).toBeNull()
-    ;(document.querySelector('pre') as HTMLElement).textContent = BAR
+    ;(document.querySelector('.md-code-block code') as HTMLElement).textContent = BAR
     channel.scan(false)
-    expect(document.querySelector('[data-infographic-host]')).not.toBeNull()
+    expect(document.querySelectorAll('[data-infographic-host]')).toHaveLength(1)
+    ;(document.querySelector('.tool pre') as HTMLElement).textContent = BAR.replace('"T"', '"B"')
+    channel.scan(false)
+    expect(document.querySelectorAll('[data-infographic-host]')).toHaveLength(1)
+    channel.scan(true)
+    expect(document.querySelectorAll('[data-infographic-host]')).toHaveLength(2)
   })
 
   it('removes everything on dispose and restores the host block', () => {

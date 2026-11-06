@@ -110,13 +110,16 @@ function eligible(block: Element): boolean {
 }
 
 /** Every host block in `scope` that holds an infographic fence, in document order. */
-export function findInfographicBlocks(scope: ParentNode, negatives?: WeakMap<Element, number>): HTMLElement[] {
+export function findInfographicBlocks(scope: ParentNode, negatives?: WeakMap<Element, number>, deep = true): HTMLElement[] {
   const found = new Set<HTMLElement>()
   const claimed = new WeakSet<Element>()
   for (const surface of knownSurfaces(scope)) {
     for (const pre of surface.querySelectorAll('pre')) claimed.add(pre)
     if (eligible(surface)) found.add(surface)
   }
+  // DSH's own code blocks are all `known surfaces`; the bare-pre walk only exists for hosts that lack that markup,
+  // so the frequent, mutation-driven scans skip it and leave it to the periodic sweep.
+  if (!deep) return [...found].sort(byDocumentOrder)
   for (const pre of scope.querySelectorAll<HTMLElement>('pre')) {
     if (claimed.has(pre)) continue
     // A pre that was already walked and found empty-handed is skipped until its text changes: the ancestor walk
@@ -136,7 +139,11 @@ export function findInfographicBlocks(scope: ParentNode, negatives?: WeakMap<Ele
     }
     if (!hit) negatives?.set(pre, length)
   }
-  return [...found].sort((left, right) => (left.compareDocumentPosition(right) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1))
+  return [...found].sort(byDocumentOrder)
+}
+
+function byDocumentOrder(left: HTMLElement, right: HTMLElement): number {
+  return left.compareDocumentPosition(right) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1
 }
 
 function luminance(color: string): number | null {
@@ -430,9 +437,10 @@ export function installFenceChannel(options: ChannelOptions = {}): Channel {
     // The periodic sweep starts from a clean slate so a stale negative can never hide a block for long.
     if (full) negatives = new WeakMap<Element, number>()
     repair()
-    const current = new Set(findInfographicBlocks(doc, negatives))
+    const current = new Set(findInfographicBlocks(doc, negatives, full))
     for (const block of current) render(block)
-    for (const block of [...mounts.keys()]) if (!current.has(block) && block.isConnected) release(block)
+    // A quick scan may legitimately miss blocks that only the deep walk finds, so only the sweep un-mounts.
+    if (full) for (const block of [...mounts.keys()]) if (!current.has(block) && block.isConnected) release(block)
     syncTheme()
   }
 
