@@ -319,6 +319,25 @@ describe('style switcher', () => {
     expect(hosts).toHaveLength(2)
     expect(hosts.map(host => host.dataset.style)).toEqual(['bcg', 'bcg'])
   })
+
+  it('re-cycles multi-series colours immediately on an explicit style pick', () => {
+    const TWO_SERIES = '{"infographic":"bar","title":"T","categories":["a"],"series":[{"name":"s1","data":[1]},{"name":"s2","data":[2]}]}'
+    document.body.innerHTML = row(block('infographic', TWO_SERIES))
+    channel = installFenceChannel({ locale: 'en', storage: asStorage(store) })
+    const host = document.querySelector('[data-infographic-host]') as HTMLElement
+    const select = document.querySelector<HTMLSelectElement>('select.dsh-ig-style') as HTMLSelectElement
+
+    expect(host.querySelector('.ig-r-purple')).not.toBeNull()
+    expect(host.querySelector('.ig-r-teal')).not.toBeNull()
+
+    select.value = 'bcg'
+    select.dispatchEvent(new Event('change'))
+
+    expect(host.dataset.style).toBe('bcg')
+    expect(host.querySelector('.ig-r-green')).not.toBeNull()
+    expect(host.querySelector('.ig-r-teal')).not.toBeNull()
+    expect(host.querySelector('.ig-r-purple')).toBeNull()
+  })
 })
 
 describe('copy png', () => {

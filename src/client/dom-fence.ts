@@ -277,7 +277,7 @@ export function installFenceChannel(options: ChannelOptions = {}): Channel {
       /* private mode or storage disabled: the pick still applies to this page load */
     }
     for (const select of doc.querySelectorAll<HTMLSelectElement>(STYLE_SELECT)) select.value = style
-    for (const mount of mounts.values()) if (mount.spec !== null) paint(mount, mount.spec)
+    for (const block of mounts.keys()) render(block)
   }
 
   const buildBar = (mount: Mount): void => {
@@ -359,7 +359,8 @@ export function installFenceChannel(options: ChannelOptions = {}): Channel {
   const render = (block: HTMLElement): void => {
     const raw = rawOf(block)
     const settled = isSettled(block)
-    const key = `${settled ? 's' : 'p'}|${raw}`
+    const activeStyle = userStyle ?? storedStyle ?? DEFAULT_STYLE
+    const key = `${settled ? 's' : 'p'}|${activeStyle}|${raw}`
     const existing = mounts.get(block)
     if (existing !== undefined && existing.key === key && existing.stage.firstElementChild !== null) return
     const result = readFence(raw, { streaming: !settled, resolveStyle: own => userStyle ?? own ?? storedStyle ?? DEFAULT_STYLE })
