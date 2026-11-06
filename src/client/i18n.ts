@@ -1,16 +1,9 @@
-import type { StyleName } from '../core/palettes.ts'
-
 export type Locale = 'zh' | 'en'
 
 const LABELS = {
   zh: {
     copyPng: '复制 PNG',
     downloadPng: '下载 PNG',
-    style: '风格',
-    styleClaude: 'Claude 默认',
-    styleMckinsey: '麦肯锡',
-    styleBcg: 'BCG',
-    styleEconomist: '经济学人',
     settings: '设置',
     settingsTitle: '信息图设置',
     settingsFrequency: '画图频率',
@@ -35,11 +28,6 @@ const LABELS = {
   en: {
     copyPng: 'Copy PNG',
     downloadPng: 'Download PNG',
-    style: 'Style',
-    styleClaude: 'Claude (default)',
-    styleMckinsey: 'McKinsey',
-    styleBcg: 'BCG',
-    styleEconomist: 'Economist',
     settings: 'Settings',
     settingsTitle: 'Infographic Settings',
     settingsFrequency: 'Drawing Frequency',
@@ -73,16 +61,4 @@ export function detectLocale(doc: Document = document): Locale {
 
 export function label(locale: Locale, key: LabelKey): string {
   return LABELS[locale][key]
-}
-
-/** Dropdown option captions, one per `StyleName`. */
-const STYLE_LABELS: Record<StyleName, LabelKey> = {
-  claude: 'styleClaude',
-  mckinsey: 'styleMckinsey',
-  bcg: 'styleBcg',
-  economist: 'styleEconomist',
-}
-
-export function styleLabel(locale: Locale, style: StyleName): string {
-  return label(locale, STYLE_LABELS[style])
 }

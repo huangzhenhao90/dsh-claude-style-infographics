@@ -66,6 +66,7 @@ export {
   isPlausibleSurface,
   detectTheme,
   STYLE_STORAGE_KEY,
+  STYLE_EVENT,
   FREQ_STORAGE_KEY,
 } from './dom-fence.ts'
 export { createSettingsPanel } from './settings-panel.ts'

@@ -9,9 +9,9 @@
  */
 import { looksLikeInfographic, readFence, renderSvg } from '../core/index.ts'
 import type { InfographicSpec } from '../core/index.ts'
-import { DEFAULT_STYLE, STYLES, isStyle, type StyleName } from '../core/palettes.ts'
+import { DEFAULT_STYLE, STYLES, type StyleName } from '../core/palettes.ts'
 import { copyPng, download, fileStem, svgToPngBlob, withStyle } from './export.ts'
-import { detectLocale, label, styleLabel, type LabelKey, type Locale } from './i18n.ts'
+import { detectLocale, label, type LabelKey, type Locale } from './i18n.ts'
 import { CSS, STYLE_ID } from './styles.ts'
 
 const SURFACES = '.md-code-block, .code-block, .code-block-small'
@@ -40,7 +40,8 @@ const INLINE_CROP_Y = 8
 /** Where the viewer's last explicit style pick is remembered between sessions. */
 export const STYLE_STORAGE_KEY = 'dsh-infographic:style'
 export const FREQ_STORAGE_KEY = 'dsh-infographic:frequency'
-const STYLE_SELECT = 'select.dsh-ig-style'
+/** In-page event the settings panel fires with the new default style as `detail`. */
+export const STYLE_EVENT = 'dsh-infographic:style'
 
 export interface ChannelOptions {
   doc?: Document
@@ -208,9 +209,7 @@ export function installFenceChannel(options: ChannelOptions = {}): Channel {
           }
         })()
 
-  /** The viewer's pick in this page load. Null until they touch the dropdown. */
-  let userStyle: StyleName | null = null
-  /** Last persisted pick, used only for specs that do not name a style of their own. */
+  /** Global default style, owned by the settings page / `infographic_config`; used for specs that name no style. */
   let storedStyle: StyleName | null = null
   try {
     storedStyle = asStyle(storage?.getItem(STYLE_STORAGE_KEY))
@@ -218,45 +217,44 @@ export function installFenceChannel(options: ChannelOptions = {}): Channel {
     storedStyle = null
   }
 
-  const syncRemoteConfig = (patch: { defaultStyle?: StyleName }): void => {
+  /** Adopt a new global default and repaint every mounted image with it. */
+  const adoptStyle = (value: unknown): void => {
+    const style = asStyle(value)
+    if (style === null || style === storedStyle) return
+    storedStyle = style
     try {
-      if (typeof fetch !== 'undefined') {
-        void fetch('/api/infographic/config', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ patch }),
-        }).catch(() => {})
-      }
+      storage?.setItem(STYLE_STORAGE_KEY, style)
+    } catch {
+      /* private mode or storage disabled: the choice still applies to this page load */
+    }
+    for (const block of mounts.keys()) render(block)
+  }
+
+  /** Ask the plugin server which default style is current (the chat tool may have changed it behind our back). */
+  let lastRemoteCheck = 0
+  const refreshRemote = (): void => {
+    const now = Date.now()
+    if (now - lastRemoteCheck < 5000) return
+    lastRemoteCheck = now
+    try {
+      if (typeof fetch === 'undefined') return
+      void fetch('/api/infographic/config', { cache: 'no-store' })
+        .then(response => response.json())
+        .then((result: { ok?: boolean; config?: { defaultStyle?: unknown } }) => {
+          if (result?.ok === true) adoptStyle(result.config?.defaultStyle)
+        })
+        .catch(() => {})
     } catch {
       /* fetch not available */
     }
   }
 
-  // Attempt initial sync with host configuration endpoint
-  try {
-    if (typeof fetch !== 'undefined') {
-      void fetch('/api/infographic/config')
-        .then(r => r.json())
-        .then((res: any) => {
-          if (res?.ok && res.config) {
-            if (isStyle(res.config.defaultStyle) && userStyle === null && storedStyle === null) {
-              const remoteStyle = res.config.defaultStyle
-              storedStyle = remoteStyle
-              try {
-                storage?.setItem(STYLE_STORAGE_KEY, remoteStyle)
-              } catch {}
-            }
-          }
-        })
-        .catch(() => {})
-    }
-  } catch {}
+  /** The settings page announces its choice in-page (localStorage writes do not fire `storage` in the same window). */
+  const onSettingsStyle = (event: Event): void => adoptStyle((event as CustomEvent<unknown>).detail)
+  view?.addEventListener(STYLE_EVENT, onSettingsStyle)
 
-  /**
-   * Cascade for one image: the viewer's explicit pick (this page load) > the style the chart
-   * author wrote into the spec > the persisted pick > `claude`.
-   */
-  const styleFor = (spec: InfographicSpec): StyleName => userStyle ?? asStyle(spec.style) ?? storedStyle ?? DEFAULT_STYLE
+  /** Cascade for one image: the style the chart author wrote into the spec > the global default > `claude`. */
+  const styleFor = (spec: InfographicSpec): StyleName => asStyle(spec.style) ?? storedStyle ?? DEFAULT_STYLE
 
   const button = (caption: string, onClick: (self: HTMLButtonElement) => void | Promise<void>): HTMLButtonElement => {
     const element = doc.createElement('button')
@@ -290,39 +288,6 @@ export function installFenceChannel(options: ChannelOptions = {}): Channel {
         },
       )
 
-  /** Style dropdown. Every mount carries one; they are kept in sync by `applyStyle`. */
-  const styleSelect = (): HTMLSelectElement => {
-    const select = doc.createElement('select')
-    select.className = 'dsh-ig-style'
-    select.setAttribute('aria-label', text('style'))
-    select.title = text('style')
-    for (const style of STYLES) {
-      const option = doc.createElement('option')
-      option.value = style
-      option.textContent = styleLabel(locale, style)
-      select.append(option)
-    }
-    select.value = userStyle ?? storedStyle ?? DEFAULT_STYLE
-    select.addEventListener('change', () => applyStyle(select.value))
-    return select
-  }
-
-  /** Remember an explicit pick and repaint every mounted image with it. */
-  const applyStyle = (value: unknown): void => {
-    const style = asStyle(value)
-    if (style === null) return
-    userStyle = style
-    storedStyle = style
-    try {
-      storage?.setItem(STYLE_STORAGE_KEY, style)
-    } catch {
-      /* private mode or storage disabled: the pick still applies to this page load */
-    }
-    syncRemoteConfig({ defaultStyle: style })
-    for (const select of doc.querySelectorAll<HTMLSelectElement>(STYLE_SELECT)) select.value = style
-    for (const block of mounts.keys()) render(block)
-  }
-
   const buildBar = (mount: Mount): void => {
     mount.bar.replaceChildren()
     const spec = mount.spec
@@ -333,7 +298,6 @@ export function installFenceChannel(options: ChannelOptions = {}): Channel {
     mount.bar.append(
       button(text('copyPng'), self => guarded(self, () => copyPng(spec, theme(), style(), doc), text('copied'))),
       button(text('downloadPng'), self => guarded(self, async () => download(`${stem}.png`, await svgToPngBlob(spec, theme(), style(), doc), doc))),
-      styleSelect(),
     )
   }
 
@@ -348,6 +312,7 @@ export function installFenceChannel(options: ChannelOptions = {}): Channel {
 
   const createMount = (block: HTMLElement): Mount => {
     counter += 1
+    refreshRemote()
     const container = doc.createElement('div')
     container.setAttribute(HOST_ATTR, '')
     const stage = doc.createElement('div')
@@ -392,11 +357,11 @@ export function installFenceChannel(options: ChannelOptions = {}): Channel {
   const render = (block: HTMLElement): void => {
     const raw = rawOf(block)
     const settled = isSettled(block)
-    const activeStyle = userStyle ?? storedStyle ?? DEFAULT_STYLE
+    const activeStyle = storedStyle ?? DEFAULT_STYLE
     const key = `${settled ? 's' : 'p'}|${activeStyle}|${raw}`
     const existing = mounts.get(block)
     if (existing !== undefined && existing.key === key && existing.stage.firstElementChild !== null) return
-    const result = readFence(raw, { streaming: !settled, resolveStyle: own => userStyle ?? own ?? storedStyle ?? DEFAULT_STYLE })
+    const result = readFence(raw, { streaming: !settled, resolveStyle: own => own ?? storedStyle ?? DEFAULT_STYLE })
     if (result.status === 'pending') return
     if (result.status === 'error') {
       release(block)
@@ -508,6 +473,7 @@ export function installFenceChannel(options: ChannelOptions = {}): Channel {
     attributes: true,
     attributeFilter: ['data-streaming', 'style', 'class', 'data-ds-dark-theme'],
   })
+  refreshRemote()
   const sweep = setInterval(() => scan(true), options.sweepMs ?? SWEEP_MS)
   scan()
 
@@ -516,6 +482,7 @@ export function installFenceChannel(options: ChannelOptions = {}): Channel {
     dispose(): void {
       disposed = true
       observer.disconnect()
+      view?.removeEventListener(STYLE_EVENT, onSettingsStyle)
       clearInterval(sweep)
       if (scanTimer !== undefined) clearTimeout(scanTimer)
       for (const block of [...mounts.keys()]) release(block)

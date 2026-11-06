@@ -216,6 +216,10 @@ export function createSettingsPanel(ctx: any): (props?: any) => any {
           try {
             localStorage.setItem(STYLE_STORAGE_KEY, patch.defaultStyle)
           } catch {}
+          try {
+            // Tell the fence renderer in this same window so charts repaint at once.
+            window.dispatchEvent(new CustomEvent('dsh-infographic:style', { detail: patch.defaultStyle }))
+          } catch {}
         }
 
         fetch(CONFIG_ROUTE, {

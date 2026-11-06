@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { detectLocale } from '../src/client/i18n.ts'
-import { STYLE_STORAGE_KEY, createSettingsPanel, detectTheme, findInfographicBlocks, installFenceChannel, isPlausibleSurface, type Channel } from '../src/client/index.ts'
+import { STYLE_EVENT, STYLE_STORAGE_KEY, createSettingsPanel, detectTheme, findInfographicBlocks, installFenceChannel, isPlausibleSurface, type Channel } from '../src/client/index.ts'
 import { normalizeSpec, renderSvg } from '../src/core/index.ts'
 import type { StyleName } from '../src/core/palettes.ts'
 
@@ -235,7 +235,7 @@ describe('channel', () => {
   })
 })
 
-describe('style switcher', () => {
+describe('global default style', () => {
   it('gives each style a distinct palette (core integration)', () => {
     const claude = coreFills(BAR, 'claude')
     expect(claude.length).toBeGreaterThan(0)
@@ -267,41 +267,39 @@ describe('style switcher', () => {
     expect(mountedFills(host)).toEqual(coreFills(BCG_BAR, 'bcg'))
   })
 
-  it('repaints every mounted image on an explicit pick, syncs the dropdowns and persists it', () => {
+  it('has no per-image style dropdown (style is a global setting)', () => {
+    document.body.innerHTML = row(block('infographic', BAR))
+    channel = installFenceChannel({ locale: 'en', storage: asStorage(store) })
+    expect(document.querySelector('select')).toBeNull()
+  })
+
+  it('repaints every mounted image when the settings page announces a new default', () => {
     document.body.innerHTML = row(block('infographic', BCG_BAR) + block('infographic', BAR.replace('"T"', '"U"')))
     channel = installFenceChannel({ locale: 'en', storage: asStorage(store) })
     const hosts = () => [...document.querySelectorAll<HTMLElement>('[data-infographic-host]')]
     expect(hosts().map(host => host.dataset.style)).toEqual(['bcg', 'claude'])
-    const before = hosts().map(host => host.querySelector('svg')?.outerHTML ?? '')
 
-    const select = document.querySelector<HTMLSelectElement>('select.dsh-ig-style') as HTMLSelectElement
-    expect([...select.options].map(option => option.value)).toEqual(['claude', 'mckinsey', 'bcg', 'economist'])
-    expect([...select.options].map(option => option.textContent)).toEqual(['Claude (default)', 'McKinsey', 'BCG', 'Economist'])
-    select.value = 'mckinsey'
-    select.dispatchEvent(new Event('change'))
+    window.dispatchEvent(new CustomEvent(STYLE_EVENT, { detail: 'mckinsey' }))
 
-    expect(hosts().map(host => host.dataset.style)).toEqual(['mckinsey', 'mckinsey'])
-    expect(hosts().map(host => host.querySelector('svg')?.outerHTML ?? '')).not.toEqual(before)
-    expect(mountedFills(hosts()[0] as HTMLElement)).toEqual(coreFills(BCG_BAR, 'mckinsey'))
+    // The spec that names its own style keeps it; the one that does not follows the new default.
+    expect(hosts().map(host => host.dataset.style)).toEqual(['bcg', 'mckinsey'])
+    expect(mountedFills(hosts()[1] as HTMLElement)).toEqual(coreFills(BAR, 'mckinsey'))
     expect(store.getItem(STYLE_STORAGE_KEY)).toBe('mckinsey')
-    expect([...document.querySelectorAll<HTMLSelectElement>('select.dsh-ig-style')].map(element => element.value)).toEqual(['mckinsey', 'mckinsey'])
   })
 
-  it('still switches when persistence is unavailable', () => {
+  it('ignores a junk style announcement and still works without persistence', () => {
     document.body.innerHTML = row(block('infographic', BAR))
     channel = installFenceChannel({ locale: 'en', storage: null })
-    const select = document.querySelector<HTMLSelectElement>('select.dsh-ig-style') as HTMLSelectElement
-    select.value = 'economist'
-    select.dispatchEvent(new Event('change'))
+    window.dispatchEvent(new CustomEvent(STYLE_EVENT, { detail: 'nordic' }))
+    expect((document.querySelector('[data-infographic-host]') as HTMLElement).dataset.style).toBe('claude')
+    window.dispatchEvent(new CustomEvent(STYLE_EVENT, { detail: 'economist' }))
     expect((document.querySelector('[data-infographic-host]') as HTMLElement).dataset.style).toBe('economist')
   })
 
-  it('keeps the explicit pick for images mounted later in the same page load', async () => {
+  it('applies a new default to images mounted later in the same page load', async () => {
     document.body.innerHTML = row(block('infographic', BAR))
     channel = installFenceChannel({ locale: 'en', sweepMs: 20, storage: asStorage(store) })
-    const select = document.querySelector<HTMLSelectElement>('select.dsh-ig-style') as HTMLSelectElement
-    select.value = 'bcg'
-    select.dispatchEvent(new Event('change'))
+    window.dispatchEvent(new CustomEvent(STYLE_EVENT, { detail: 'bcg' }))
     document.body.insertAdjacentHTML('beforeend', row(block('infographic', BAR.replace('"T"', '"V"'))))
     await wait(120)
     const hosts = [...document.querySelectorAll<HTMLElement>('[data-infographic-host]')]
@@ -309,18 +307,16 @@ describe('style switcher', () => {
     expect(hosts.map(host => host.dataset.style)).toEqual(['bcg', 'bcg'])
   })
 
-  it('re-cycles multi-series colours immediately on an explicit style pick', () => {
+  it('re-cycles multi-series colours immediately when the default style changes', () => {
     const TWO_SERIES = '{"infographic":"bar","title":"T","categories":["a"],"series":[{"name":"s1","data":[1]},{"name":"s2","data":[2]}]}'
     document.body.innerHTML = row(block('infographic', TWO_SERIES))
     channel = installFenceChannel({ locale: 'en', storage: asStorage(store) })
     const host = document.querySelector('[data-infographic-host]') as HTMLElement
-    const select = document.querySelector<HTMLSelectElement>('select.dsh-ig-style') as HTMLSelectElement
 
     expect(host.querySelector('.ig-r-purple')).not.toBeNull()
     expect(host.querySelector('.ig-r-teal')).not.toBeNull()
 
-    select.value = 'bcg'
-    select.dispatchEvent(new Event('change'))
+    window.dispatchEvent(new CustomEvent(STYLE_EVENT, { detail: 'bcg' }))
 
     expect(host.dataset.style).toBe('bcg')
     expect(host.querySelector('.ig-r-green')).not.toBeNull()
