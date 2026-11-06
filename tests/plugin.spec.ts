@@ -56,4 +56,39 @@ describe('node plugin', () => {
     expect(complete.length).toBeGreaterThanOrEqual(7)
     for (const body of complete) expect(readFence(body).status, body.slice(0, 60)).toBe('ok')
   })
+
+  it('registers infographic_config tool and updates prompt section on execution', async () => {
+    let currentSection: { name: string; order: number; text: string } | undefined
+    let registeredTool: any
+    const ctx = {
+      systemPrompt: {
+        section: (entry: { name: string; order: number; text: string }) => {
+          currentSection = entry
+          return () => { currentSection = undefined }
+        },
+        getSectionOrder: () => 42,
+      },
+      inject: (services: string[], callback: (value: any) => void) => {
+        if (services.includes('tools')) {
+          callback({ tools: { register: (tool: any) => { registeredTool = tool } } })
+        }
+      },
+    }
+    apply(ctx as never)
+    expect(registeredTool).toBeDefined()
+    expect(registeredTool.name).toBe('infographic_config')
+
+    // Read current config
+    const readResult = await registeredTool.execute({})
+    expect(readResult.ok).toBe(true)
+    expect(readResult.config).toBeDefined()
+
+    // Update config via tool
+    const updateResult = await registeredTool.execute({ patch: { frequency: 'high', defaultStyle: 'mckinsey' } })
+    expect(updateResult.ok).toBe(true)
+    expect(updateResult.config.frequency).toBe('high')
+    expect(updateResult.config.defaultStyle).toBe('mckinsey')
+    expect(currentSection?.text).toContain('视觉优先（积极模式）')
+    expect(currentSection?.text).toContain('mckinsey')
+  })
 })

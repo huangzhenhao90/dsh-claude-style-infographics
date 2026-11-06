@@ -13,5 +13,5 @@ export function apply(): () => void {
   return () => channel.dispose()
 }
 
-export { installFenceChannel, findInfographicBlocks, isPlausibleSurface, detectTheme, STYLE_STORAGE_KEY } from './dom-fence.ts'
+export { installFenceChannel, findInfographicBlocks, isPlausibleSurface, detectTheme, STYLE_STORAGE_KEY, FREQ_STORAGE_KEY } from './dom-fence.ts'
 export type { Channel, ChannelOptions } from './dom-fence.ts'
