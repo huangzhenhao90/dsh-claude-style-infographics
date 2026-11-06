@@ -33,8 +33,8 @@ const EXCLUDES = [
 const BLOCK_CONTENT = 'p, ul, ol, dl, table, h1, h2, h3, h4, h5, h6, blockquote, hr, img, figure'
 const SURFACE_HOPS = 4
 const CHROME_TEXT_LIMIT = 80
-const SCAN_DELAY_MS = 80
-const SWEEP_MS = 1000
+const SCAN_DELAY_MS = 120
+const SWEEP_MS = 3000
 const INLINE_CROP_X = 26
 const INLINE_CROP_Y = 8
 /** Where the viewer's last explicit style pick is remembered between sessions. */
@@ -109,7 +109,7 @@ function eligible(block: Element): boolean {
 }
 
 /** Every host block in `scope` that holds an infographic fence, in document order. */
-export function findInfographicBlocks(scope: ParentNode): HTMLElement[] {
+export function findInfographicBlocks(scope: ParentNode, negatives?: WeakMap<Element, number>): HTMLElement[] {
   const found = new Set<HTMLElement>()
   const claimed = new WeakSet<Element>()
   for (const surface of knownSurfaces(scope)) {
@@ -117,15 +117,23 @@ export function findInfographicBlocks(scope: ParentNode): HTMLElement[] {
     if (eligible(surface)) found.add(surface)
   }
   for (const pre of scope.querySelectorAll<HTMLElement>('pre')) {
-    if (claimed.has(pre) || pre.closest(EXCLUDES) !== null) continue
+    if (claimed.has(pre)) continue
+    // A pre that was already walked and found empty-handed is skipped until its text changes: the ancestor walk
+    // below reads whole message subtrees, which is what made long conversations stutter.
+    const length = (pre.textContent ?? '').length
+    if (negatives?.get(pre) === length) continue
+    if (pre.closest(EXCLUDES) !== null) continue
+    let hit = false
     let element: HTMLElement | null = pre.parentElement
     for (let hops = 0; element !== null && hops < SURFACE_HOPS; hops += 1, element = element.parentElement) {
       if (!isPlausibleSurface(element)) break
       if (eligible(element)) {
         found.add(element)
+        hit = true
         break
       }
     }
+    if (!hit) negatives?.set(pre, length)
   }
   return [...found].sort((left, right) => (left.compareDocumentPosition(right) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1))
 }
@@ -165,7 +173,7 @@ interface Diagnostic {
 
 export interface Channel {
   /** Scan the document now (the observer and sweep call this for you). */
-  scan(): void
+  scan(full?: boolean): void
   dispose(): void
 }
 
@@ -451,10 +459,13 @@ export function installFenceChannel(options: ChannelOptions = {}): Channel {
     }
   }
 
-  const scan = (): void => {
+  let negatives = new WeakMap<Element, number>()
+  const scan = (full = true): void => {
     if (disposed) return
+    // The periodic sweep starts from a clean slate so a stale negative can never hide a block for long.
+    if (full) negatives = new WeakMap<Element, number>()
     repair()
-    const current = new Set(findInfographicBlocks(doc))
+    const current = new Set(findInfographicBlocks(doc, negatives))
     for (const block of current) render(block)
     for (const block of [...mounts.keys()]) if (!current.has(block) && block.isConnected) release(block)
     syncTheme()
@@ -464,7 +475,7 @@ export function installFenceChannel(options: ChannelOptions = {}): Channel {
     if (scanTimer !== undefined || disposed) return
     scanTimer = setTimeout(() => {
       scanTimer = undefined
-      scan()
+      scan(false)
     }, SCAN_DELAY_MS)
   }
 
@@ -497,7 +508,7 @@ export function installFenceChannel(options: ChannelOptions = {}): Channel {
     attributes: true,
     attributeFilter: ['data-streaming', 'style', 'class', 'data-ds-dark-theme'],
   })
-  const sweep = setInterval(scan, options.sweepMs ?? SWEEP_MS)
+  const sweep = setInterval(() => scan(true), options.sweepMs ?? SWEEP_MS)
   scan()
 
   return {

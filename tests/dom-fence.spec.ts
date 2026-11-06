@@ -215,6 +215,15 @@ describe('channel', () => {
     expect(detectLocale(en)).toBe('en')
   })
 
+  it('still picks up a block whose text becomes an infographic after being skipped', () => {
+    document.body.innerHTML = '<div class="msg"><div class="tool"><pre>plain output</pre></div></div>'
+    channel = installFenceChannel({ locale: 'en', sweepMs: 100000 })
+    expect(document.querySelector('[data-infographic-host]')).toBeNull()
+    ;(document.querySelector('pre') as HTMLElement).textContent = BAR
+    channel.scan(false)
+    expect(document.querySelector('[data-infographic-host]')).not.toBeNull()
+  })
+
   it('removes everything on dispose and restores the host block', () => {
     document.body.innerHTML = row(block('infographic', BAR))
     channel = installFenceChannel()
