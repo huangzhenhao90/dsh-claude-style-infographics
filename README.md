@@ -24,6 +24,10 @@
 
 ![对话中的预览效果](docs/preview-chat.jpg)
 
+时间轴同理，下面是问「DSH 又更新了吗」后直接生成的发版时间线：
+
+![时间轴预览效果](docs/preview-timeline.jpg)
+
 ---
 
 ### 支持的七种图表类型
