@@ -132,6 +132,18 @@ describe('renderSvg', () => {
     expect(svg).not.toContain('…')
   })
 
+  it('keeps left-to-right edge labels whole by widening the gap between layers', () => {
+    const svg = renderInfographic({
+      infographic: 'flow',
+      direction: 'right',
+      nodes: [{ id: 'a', label: '你' }, { id: 'b', label: '白名单' }, { id: 'c', label: 'subagent(prompt, model, ...)' }],
+      edges: [{ from: 'a', to: 'b', label: '暴露成可选字段（enum）' }, { from: 'b', to: 'c', label: '本次调用临时决定' }],
+    } as never)
+    expect(svg).toContain('暴露成可选字段（enum）')
+    expect(svg).toContain('本次调用临时决定')
+    expect(svg).not.toContain('…')
+  })
+
   it('never starts a wrapped line with closing punctuation', async () => {
     const { wrap } = await import('../src/core/text.ts')
     for (const width of [60, 80, 100, 120]) {

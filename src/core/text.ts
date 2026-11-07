@@ -57,7 +57,13 @@ export function wrap(text: string, width: number, size: number, weight = 400, ma
   const tokens: string[] = []
   for (const token of raw) {
     if (tokens.length > 0 && NO_LINE_START.test(token)) tokens[tokens.length - 1] += token
-    else tokens.push(token)
+    else if (!fits(token.trimEnd(), width, size, weight)) {
+      // A single word wider than the line (an identifier, a URL) is broken per character rather than cut off.
+      for (const char of token) {
+        if (tokens.length > 0 && NO_LINE_START.test(char)) tokens[tokens.length - 1] += char
+        else tokens.push(char)
+      }
+    } else tokens.push(token)
   }
   const lines: string[] = []
   let current = ''

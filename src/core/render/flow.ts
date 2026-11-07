@@ -1,6 +1,6 @@
 import type { FlowEdge, FlowNode, FlowSpec } from '../types.ts'
 import { measure, wrap } from '../text.ts'
-import { CONTENT_WIDTH, MARGIN_X, roundedPath, round, titleOf, txt, textBlock, type Piece, type Point } from './common.ts'
+import { CONTENT_WIDTH, MARGIN_X, roundedPath, round, titleOf, textBlock, type Piece, type Point } from './common.ts'
 
 const LABEL_SIZE = 14
 const SUB_SIZE = 12
@@ -9,6 +9,8 @@ const SUB_LINE = 16
 const WIDTH_STEPS = [220, 180, 150, 120]
 /** Wrapped text may run this many lines before it is ellipsized; cutting content is the last resort. */
 const MAX_LINES = 7
+/** Widest gap an arrow label may claim between two layers; longer labels wrap onto extra lines. */
+const MAX_LABEL_GAP = 170
 
 interface Box {
   node: FlowNode
@@ -213,13 +215,26 @@ function layoutFlow(spec: FlowSpec, maxWidth: number): Layout {
 
   const labelled = (level: number): boolean => chains.some(chain => chain.edge.label !== undefined && chain.nodes.some(entry => entry.layer === level))
   const layerMain = layers.map(members => Math.max(12, ...members.map(member => member.main)))
+  // Left-to-right, an edge label sits on the arrow, so the gap after a layer must be wide enough to hold it.
+  const labelRoom = (level: number): number => {
+    let widest = 0
+    for (const chain of chains) {
+      if (chain.edge.label === undefined) continue
+      for (let index = 1; index < chain.nodes.length; index += 1) {
+        const upper = chain.nodes[index - 1] as LNode
+        if (upper.layer === level) widest = Math.max(widest, measure(chain.edge.label, 11) + 28)
+      }
+    }
+    return Math.min(widest, MAX_LABEL_GAP)
+  }
+  const gapAfter = (level: number): number => (right ? Math.max(66, labelRoom(level)) : labelled(level) ? 56 : 46)
   const layerStart: number[] = []
   let cursor = 0
   layerMain.forEach((size, level) => {
     layerStart.push(cursor)
-    cursor += size + (right ? 66 : labelled(level) ? 56 : 46)
+    cursor += size + gapAfter(level)
   })
-  const mainExtent = cursor - (right ? 66 : 46)
+  const mainExtent = cursor - gapAfter(layerMain.length - 1)
   return { nodes: all, chains, layerStart, layerMain, mainExtent, crossExtent: maxCross - minCross }
 }
 
@@ -315,18 +330,27 @@ function drawEdge(layout: Layout, spec: FlowSpec, chain: Chain, sidePort: 'cross
     const parts = segments(points)
     const firstSegment = parts[0]
     let anchor: { x: number; y: number; anchor: 'start' | 'middle' } | undefined
+    let chosenLength: number | undefined
     if (firstSegment !== undefined && firstSegment.horizontal && firstSegment.length >= 24 && sidePort !== null) {
       anchor = { x: (firstSegment.from.x + firstSegment.to.x) / 2, y: firstSegment.from.y - 9, anchor: 'middle' }
+      chosenLength = firstSegment.length
     } else {
       const vertical = parts.filter(part => !part.horizontal).sort((left, right) => right.length - left.length)[0]
       const chosen = vertical ?? [...parts].sort((left, right) => right.length - left.length)[0]
       if (chosen !== undefined) {
+        chosenLength = chosen.length
         anchor = chosen.horizontal
           ? { x: (chosen.from.x + chosen.to.x) / 2, y: chosen.from.y - 9, anchor: 'middle' }
           : { x: chosen.from.x + 8, y: (chosen.from.y + chosen.to.y) / 2, anchor: 'start' }
       }
     }
-    if (anchor !== undefined) svg += txt(anchor.x, anchor.y, chain.edge.label, { size: 11, cls: 'ig-t2', anchor: anchor.anchor })
+    if (anchor !== undefined) {
+      // Wrap into the room the segment actually has instead of letting the text run over the nodes.
+      const room = anchor.anchor === 'middle' ? Math.max(40, (chosenLength ?? 120) - 8) : 160
+      const lines = wrap(chain.edge.label, room, 11, 400, 3)
+      const centerY = anchor.anchor === 'middle' ? anchor.y - ((lines.length - 1) * 14) / 2 : anchor.y
+      svg += textBlock(anchor.x, centerY, lines, 14, { size: 11, cls: 'ig-t2', anchor: anchor.anchor })
+    }
   }
   return svg
 }
