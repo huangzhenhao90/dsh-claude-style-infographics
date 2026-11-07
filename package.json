@@ -79,10 +79,10 @@
     "vitest": "^3.0.0"
   },
   "scripts": {
-    "build": "node scripts/clean.mjs && tsc -p tsconfig.json && tsdown",
+    "build": "node scripts/build.mjs",
     "test": "vitest run",
     "examples": "node scripts/render-examples.mjs",
-    "check": "node scripts/clean.mjs && tsc -p tsconfig.json && vitest run && tsdown && node scripts/verify-bundle.mjs && node scripts/render-examples.mjs --check"
+    "check": "tsc -p tsconfig.json --noEmit && vitest run && node scripts/build.mjs && node scripts/render-examples.mjs --check"
   },
   "dsh": {
     "bundle": {

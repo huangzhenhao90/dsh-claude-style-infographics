@@ -16,7 +16,7 @@ const define = {
 const nodeConfig: UserConfig = {
   name: `${ID}/node`,
   entry: { index: 'src/index.ts' },
-  outDir: 'lib',
+  outDir: process.env.DSH_OUT ?? 'lib',
   format: ['esm'],
   platform: 'node',
   target: 'es2024',
@@ -29,7 +29,7 @@ const nodeConfig: UserConfig = {
 const coreConfig: UserConfig = {
   name: `${ID}/core`,
   entry: { core: 'src/core/index.ts' },
-  outDir: 'lib',
+  outDir: process.env.DSH_OUT ?? 'lib',
   format: ['esm'],
   platform: 'neutral',
   target: 'es2024',
@@ -42,7 +42,7 @@ const coreConfig: UserConfig = {
 const clientConfig: UserConfig = {
   name: `${ID}/client`,
   entry: { client: 'src/client/index.ts' },
-  outDir: 'lib',
+  outDir: process.env.DSH_OUT ?? 'lib',
   format: 'cjs',
   platform: 'browser',
   dts: false,
@@ -66,7 +66,7 @@ const clientConfig: UserConfig = {
 const globalConfig: UserConfig = {
   name: `${ID}/global`,
   entry: { 'infographic.global': 'src/global.ts' },
-  outDir: 'lib',
+  outDir: process.env.DSH_OUT ?? 'lib',
   format: 'iife',
   platform: 'browser',
   dts: false,

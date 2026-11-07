@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs'
 import vm from 'node:vm'
 import { fileURLToPath } from 'node:url'
 
-const lib = new URL('../lib/', import.meta.url)
+const lib = new URL(`../${process.env.DSH_OUT ?? 'lib'}/`, import.meta.url)
 const read = name => readFileSync(fileURLToPath(new URL(name, lib)), 'utf8')
 const problems = []
 
