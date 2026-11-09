@@ -1,4 +1,5 @@
 import { DEFAULT_STYLE, PALETTES, STYLES, isStyle, type StyleName } from './palettes.ts'
+import { LINE_BREAK } from './text.ts'
 import { isRamp } from './theme.ts'
 import {
   KINDS,
@@ -46,10 +47,19 @@ function pick(source: Obj, ...keys: string[]): unknown {
   return undefined
 }
 
+/** An author's `<br>` (or a literal newline) is a line break; everything else collapses to one space. */
+const LINE_BREAK_TAG = /<br\s*\/?>/gi
+
 function text(value: unknown, max: number = LIMITS.text): string | undefined {
   if (typeof value === 'number' && Number.isFinite(value)) value = String(value)
   if (typeof value !== 'string') return undefined
-  const clean = value.replace(/\s+/g, ' ').trim()
+  const clean = value
+    .replace(LINE_BREAK_TAG, LINE_BREAK)
+    .replace(/\r\n?/g, LINE_BREAK)
+    .split(LINE_BREAK)
+    .map(line => line.replace(/\s+/g, ' ').trim())
+    .filter(line => line !== '')
+    .join(LINE_BREAK)
   if (clean === '') return undefined
   return [...clean].length > max ? `${[...clean].slice(0, max - 1).join('')}…` : clean
 }

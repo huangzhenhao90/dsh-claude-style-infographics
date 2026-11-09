@@ -3,6 +3,7 @@ import { join } from 'node:path'
 import { JSDOM } from 'jsdom'
 import { describe, expect, it } from 'vitest'
 import { looksLikeInfographic, normalizeSpec, parseLoose, readFence, renderInfographic, renderSvg } from '../src/core/index.ts'
+import { measure } from '../src/core/text.ts'
 
 const examplesDir = join(import.meta.dirname, '..', 'examples')
 const examples = readdirSync(examplesDir).filter(name => name.endsWith('.json')).sort()
@@ -10,6 +11,77 @@ const parser = new (new JSDOM('').window.DOMParser)()
 
 function wellFormed(svg: string): boolean {
   return parser.parseFromString(svg, 'image/svg+xml').querySelector('parsererror') === null
+}
+
+interface Box {
+  left: number
+  right: number
+  top: number
+  bottom: number
+}
+
+/** Wrapper <g> elements carry the offset and any downscale, so text and shapes only compare once both are applied. */
+function transformOf(element: Element): { tx: number; ty: number; scale: number } {
+  let tx = 0
+  let ty = 0
+  let scale = 1
+  for (let node: Element | null = element; node; node = node.parentElement) {
+    const transform = node.getAttribute?.('transform')
+    if (transform === null || transform === undefined) continue
+    const translate = /translate\(\s*([-\d.]+)[ ,]+([-\d.]+)\s*\)/.exec(transform)
+    const zoom = /scale\(\s*([-\d.]+)\s*\)/.exec(transform)
+    if (translate !== null) {
+      tx += Number(translate[1]) * scale
+      ty += Number(translate[2]) * scale
+    }
+    if (zoom !== null) scale *= Number(zoom[1])
+  }
+  return { tx, ty, scale }
+}
+
+/** Node shapes and every small text run, in absolute coordinates. */
+function rectsOf(svg: string): { boxes: Box[]; labels: (Box & { text: string })[] } {
+  const doc = parser.parseFromString(svg, 'image/svg+xml')
+  const boxes: Box[] = []
+  for (const group of doc.querySelectorAll('g[class^="ig-r-"]')) {
+    const shape = group.querySelector('rect, polygon')
+    if (shape === null) continue
+    const { tx, ty, scale } = transformOf(shape)
+    let left: number
+    let top: number
+    let right: number
+    let bottom: number
+    if (shape.tagName.toLowerCase() === 'rect') {
+      left = Number(shape.getAttribute('x'))
+      top = Number(shape.getAttribute('y'))
+      right = left + Number(shape.getAttribute('width'))
+      bottom = top + Number(shape.getAttribute('height'))
+    } else {
+      const points = (shape.getAttribute('points') ?? '').trim().split(/\s+/).map(point => point.split(',').map(Number))
+      const xs = points.map(point => point[0] as number)
+      const ys = points.map(point => point[1] as number)
+      left = Math.min(...xs)
+      right = Math.max(...xs)
+      top = Math.min(...ys)
+      bottom = Math.max(...ys)
+    }
+    boxes.push({ left: left * scale + tx, right: right * scale + tx, top: top * scale + ty, bottom: bottom * scale + ty })
+  }
+  const labels: (Box & { text: string })[] = []
+  for (const text of doc.querySelectorAll('text')) {
+    if (text.closest('g[class^="ig-r-"]') !== null) continue
+    const size = Number(text.getAttribute('font-size') ?? 12)
+    if (size > 13) continue
+    const { tx, ty, scale } = transformOf(text)
+    const width = measure(text.textContent ?? '', size, Number(text.getAttribute('font-weight') ?? 400)) * scale
+    const anchor = text.getAttribute('text-anchor') ?? 'start'
+    const x = Number(text.getAttribute('x')) * scale + tx
+    const y = Number(text.getAttribute('y')) * scale + ty
+    const height = size * 1.16 * scale
+    const left = anchor === 'middle' ? x - width / 2 : anchor === 'end' ? x - width : x
+    labels.push({ left, right: left + width, top: y - height / 2, bottom: y + height / 2, text: text.textContent ?? '' })
+  }
+  return { boxes, labels }
 }
 
 describe('parseLoose', () => {
@@ -142,6 +214,48 @@ describe('renderSvg', () => {
     expect(svg).toContain('暴露成可选字段（enum）')
     expect(svg).toContain('本次调用临时决定')
     expect(svg).not.toContain('…')
+  })
+
+  it('turns an author-typed <br> into a real line break', () => {
+    const svg = renderInfographic({
+      infographic: 'bar',
+      title: '年阅读量',
+      unit: '本/年',
+      categories: ['普通大众<br>金融资产<1亿韩元', '超级富豪<br>金融资产≥100亿韩元'],
+      series: [{ name: '2024', data: [6, 20] }],
+    } as never)
+    expect(svg).not.toContain('<br')
+    expect(svg).not.toContain('&lt;br')
+    // The halves land on their own lines; the angle bracket that is real content stays escaped.
+    expect(svg).toContain('>普通大众</text>')
+    expect(svg).toContain('>金融资产&lt;1亿韩元</text>')
+  })
+
+  it('keeps edge labels off each other and off the node boxes', () => {
+    // Two arrows leave one diamond for the same layer, so both labels want the same midpoint.
+    const svg = renderInfographic({
+      infographic: 'flow',
+      direction: 'down',
+      nodes: [
+        { id: 'q1', label: '存在互斥的状态吗？', sub: '“在做”和“做完了”不能同时为真', shape: 'diamond' },
+        { id: 'q2', label: '有明确事件推动转移吗？', sub: '提交、确认、超时、取消', shape: 'diamond' },
+        { id: 'yes', label: '值得显式化', sub: '写下来、给状态起名、定转移规则', shape: 'pill' },
+        { id: 'no', label: '继续隐式，够用', sub: '小、单人、可逆、代价低', shape: 'pill' },
+      ],
+      edges: [
+        { from: 'q1', to: 'q2', label: '是' },
+        { from: 'q1', to: 'no', label: '否' },
+        { from: 'q2', to: 'yes', label: '是' },
+        { from: 'q2', to: 'no', label: '否' },
+      ],
+    } as never)
+    const { boxes, labels } = rectsOf(svg)
+    expect(labels.map(entry => entry.text)).toEqual(['是', '否', '是', '否'])
+    const collide = (a: Box, b: Box): boolean => a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom
+    for (const [index, label] of labels.entries()) {
+      for (const other of labels.slice(index + 1)) expect(`${label.text}×${other.text}: ${collide(label, other)}`).toBe(`${label.text}×${other.text}: false`)
+      for (const box of boxes) expect(`${label.text}: ${collide(label, box)}`).toBe(`${label.text}: false`)
+    }
   })
 
   it('never starts a wrapped line with closing punctuation', async () => {

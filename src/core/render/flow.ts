@@ -11,6 +11,11 @@ const WIDTH_STEPS = [220, 180, 150, 120]
 const MAX_LINES = 7
 /** Widest gap an arrow label may claim between two layers; longer labels wrap onto extra lines. */
 const MAX_LABEL_GAP = 170
+/** Edge labels are drawn smaller than node text so the arrow, not the words, stays the subject. */
+const EDGE_SIZE = 11
+const EDGE_LINE = 14
+/** Clearance a label keeps from a node box and from another label. */
+const LABEL_PAD = 5
 
 interface Box {
   node: FlowNode
@@ -227,7 +232,9 @@ function layoutFlow(spec: FlowSpec, maxWidth: number): Layout {
     }
     return Math.min(widest, MAX_LABEL_GAP)
   }
-  const gapAfter = (level: number): number => (right ? Math.max(66, labelRoom(level)) : labelled(level) ? 56 : 46)
+  // Every arrow leaving a layer stacks its label in the gap below it, so a busy layer needs a taller gap.
+  const labelCount = (level: number): number => chains.filter(chain => !chain.reversed && chain.edge.label !== undefined && (chain.nodes[0] as LNode).layer === level).length
+  const gapAfter = (level: number): number => (right ? Math.max(66, labelRoom(level)) : Math.max(labelled(level) ? 56 : 46, 16 + labelCount(level) * 20))
   const layerStart: number[] = []
   let cursor = 0
   layerMain.forEach((size, level) => {
@@ -253,7 +260,7 @@ function segments(points: Point[]): { from: Point; to: Point; length: number; ho
   return result
 }
 
-function drawEdge(layout: Layout, spec: FlowSpec, chain: Chain, sidePort: 'cross-' | 'cross+' | null, markerId: string): string {
+function drawEdge(layout: Layout, spec: FlowSpec, chain: Chain, sidePort: 'cross-' | 'cross+' | null, markerId: string): EdgeDrawing {
   const placement = (entry: LNode): { entry: number; exit: number } => {
     const start = layout.layerStart[entry.layer] as number
     const size = layout.layerMain[entry.layer] as number
@@ -326,6 +333,7 @@ function drawEdge(layout: Layout, spec: FlowSpec, chain: Chain, sidePort: 'cross
   const path = roundedPath(points, 8)
   const dash = chain.edge.dashed ? ' ig-dash' : ''
   let svg = `<path class="ig-edge${dash}" d="${path}" marker-end="url(#${markerId})"/>`
+  let label: PendingLabel | undefined
   if (chain.edge.label !== undefined) {
     const parts = segments(points)
     const firstSegment = parts[0]
@@ -347,10 +355,127 @@ function drawEdge(layout: Layout, spec: FlowSpec, chain: Chain, sidePort: 'cross
     if (anchor !== undefined) {
       // Wrap into the room the segment actually has instead of letting the text run over the nodes.
       const room = anchor.anchor === 'middle' ? Math.max(40, (chosenLength ?? 120) - 8) : 160
-      const lines = wrap(chain.edge.label, room, 11, 400, 3)
-      const centerY = anchor.anchor === 'middle' ? anchor.y - ((lines.length - 1) * 14) / 2 : anchor.y
-      svg += textBlock(anchor.x, centerY, lines, 14, { size: 11, cls: 'ig-t2', anchor: anchor.anchor })
+      label = {
+        lines: wrap(chain.edge.label, room, EDGE_SIZE, 400, 3),
+        anchor: anchor.anchor,
+        x: anchor.x,
+        y: anchor.y,
+        // A label beside a vertical run slides up and down; one over a horizontal run slides sideways.
+        axis: anchor.anchor === 'middle' ? 'x' : 'y',
+        travel: Math.max(24, (chosenLength ?? 60) / 2 + 24),
+      }
     }
+  }
+  return label === undefined ? { svg } : { svg, label }
+}
+
+interface EdgeDrawing {
+  svg: string
+  label?: PendingLabel
+}
+
+interface PendingLabel {
+  lines: string[]
+  anchor: 'start' | 'middle'
+  x: number
+  y: number
+  /** The axis the label may slide along to dodge what is already drawn. */
+  axis: 'x' | 'y'
+  /** How far it may slide before it no longer reads as belonging to its own arrow. */
+  travel: number
+}
+
+interface Rect {
+  left: number
+  right: number
+  top: number
+  bottom: number
+}
+
+function overlapArea(a: Rect, b: Rect): number {
+  const width = Math.min(a.right, b.right) - Math.max(a.left, b.left)
+  const height = Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top)
+  return width > 0 && height > 0 ? width * height : 0
+}
+
+/**
+ * Edge labels are placed one at a time, each nudged along its own arrow until it clears the node boxes and
+ * every label already placed. Nothing else knows about the others: without this pass two arrows leaving the
+ * same node for the same layer compute the same midpoint and stack their labels on identical coordinates.
+ */
+function placeLabels(labels: PendingLabel[], obstacles: Rect[]): string {
+  const placed: Rect[] = []
+  let svg = ''
+  for (const label of labels) {
+    const width = Math.max(...label.lines.map(line => measure(line, EDGE_SIZE)))
+    const height = label.lines.length * EDGE_LINE
+    // A middle-anchored block is drawn lifted by half its extra lines, exactly as textBlock lays it out.
+    const lift = label.anchor === 'middle' ? ((label.lines.length - 1) * EDGE_LINE) / 2 : 0
+    const rectAt = (value: number): Rect => {
+      const x = label.axis === 'x' ? value : label.x
+      const y = (label.axis === 'y' ? value : label.y) - lift
+      const left = label.anchor === 'middle' ? x - width / 2 : x
+      return { left, right: left + width, top: y - height / 2, bottom: y + height / 2 }
+    }
+    const ideal = label.axis === 'y' ? label.y : label.x
+    const base = rectAt(ideal)
+    const half = label.axis === 'y' ? height / 2 : width / 2
+    let low = -Infinity
+    let high = Infinity
+    for (const box of obstacles) {
+      // Only nodes that share the label's other axis can crowd it.
+      const inBand = label.axis === 'y'
+        ? box.right + LABEL_PAD > base.left && box.left - LABEL_PAD < base.right
+        : box.bottom + LABEL_PAD > base.top && box.top - LABEL_PAD < base.bottom
+      if (!inBand) continue
+      const before = label.axis === 'y' ? box.bottom : box.right
+      const after = label.axis === 'y' ? box.top : box.left
+      // The box occupies [near, far] along the label's movement axis, whichever way the axis points.
+      const near = Math.min(before, after)
+      const far = Math.max(before, after)
+      if (ideal < near) high = Math.min(high, near - LABEL_PAD - half)
+      else if (ideal > far) low = Math.max(low, far + LABEL_PAD + half)
+      // The ideal spot sits inside a node: leave by the nearer edge.
+      else if (ideal - near <= far - ideal) high = Math.min(high, near - LABEL_PAD - half)
+      else low = Math.max(low, far + LABEL_PAD + half)
+    }
+    let from = Math.max(low, ideal - label.travel)
+    let to = Math.min(high, ideal + label.travel)
+    if (from > to) {
+      // The arrow is too short to hold its own label clear of the nodes: leave the node anyway.
+      from = low === -Infinity ? ideal : low
+      to = high === Infinity ? ideal : high
+      if (from > to) {
+        from = ideal
+        to = ideal
+      }
+    }
+    let chosen = ideal
+    let best = Infinity
+    const seen = new Set<number>()
+    search: for (let step = 0; step <= label.travel; step += 1) {
+      for (const candidate of step === 0 ? [ideal] : [ideal + step, ideal - step]) {
+        const value = Math.min(to, Math.max(from, candidate))
+        if (seen.has(value)) continue
+        seen.add(value)
+        const rect = rectAt(value)
+        let overlap = 0
+        for (const other of placed) overlap += overlapArea(rect, other)
+        if (overlap === 0) {
+          chosen = value
+          best = 0
+          break search
+        }
+        if (overlap < best) {
+          best = overlap
+          chosen = value
+        }
+      }
+    }
+    placed.push(rectAt(chosen))
+    const x = label.axis === 'x' ? chosen : label.x
+    const y = (label.axis === 'y' ? chosen : label.y) - lift
+    svg += textBlock(x, y, label.lines, EDGE_LINE, { size: EDGE_SIZE, cls: 'ig-t2', anchor: label.anchor })
   }
   return svg
 }
@@ -430,9 +555,28 @@ export function renderFlow(spec: FlowSpec, top: number, prefix: string): Piece {
     }
   }
 
-  const edges = layout.chains.map(chain => drawEdge(layout, spec, chain, ports.get(chain) ?? null, markerId)).join('')
+  const drawings = layout.chains.map(chain => drawEdge(layout, spec, chain, ports.get(chain) ?? null, markerId))
+  const edges = drawings.map(drawing => drawing.svg).join('')
   const nodes = layout.nodes.filter(entry => entry.box !== undefined).map(entry => drawNode(layout, spec, entry)).join('')
+  // Node boxes are the fixed obstacles every edge label has to keep clear of.
+  const obstacles: Rect[] = []
+  for (const entry of layout.nodes) {
+    if (entry.box === undefined) continue
+    const start = layout.layerStart[entry.layer] as number
+    const size = layout.layerMain[entry.layer] as number
+    const center = toXY(spec, start + size / 2, entry.pos)
+    obstacles.push({
+      left: center.x - entry.box.w / 2,
+      right: center.x + entry.box.w / 2,
+      top: center.y - entry.box.h / 2,
+      bottom: center.y + entry.box.h / 2,
+    })
+  }
+  const pending: PendingLabel[] = []
+  for (const drawing of drawings) if (drawing.label !== undefined) pending.push(drawing.label)
+  // Labels paint under the nodes, so a label that still has nowhere to go never covers a node's own text.
+  const labels = placeLabels(pending, obstacles)
   const transform = scale < 1 ? `translate(${round(offsetX)} ${top}) scale(${round(scale * 1000) / 1000})` : `translate(${round(offsetX)} ${top})`
   const defs = `<marker id="${markerId}" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="9" markerHeight="9" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path class="ig-arrowhead" d="M2 1.5L8 5L2 8.5"/></marker>`
-  return { body: `<g transform="${transform}">${edges}${nodes}</g>`, bottom: top + height * scale, defs }
+  return { body: `<g transform="${transform}">${edges}${labels}${nodes}</g>`, bottom: top + height * scale, defs }
 }

@@ -21,20 +21,28 @@ function isWide(code: number): boolean {
     || (code >= 0x20000 && code <= 0x3fffd)
 }
 
+/** The line-break character an author's `<br>` (or a literal newline) is normalised to. */
+export const LINE_BREAK = '\n'
+
 /** Estimated rendered width in px of `text` at `size` (system-ui; CJK counted as one em). */
 export function measure(text: string, size: number, weight = 400): number {
   const bold = weight >= 500 ? 1.04 : 1
-  let em = 0
-  for (const char of text) {
-    const code = char.codePointAt(0) as number
-    if (isWide(code)) em += 1
-    else if (NARROW.has(char)) em += 0.32
-    else if (WIDE.has(char)) em += 0.86
-    else if (char >= '0' && char <= '9') em += 0.58
-    else if (char >= 'A' && char <= 'Z') em += 0.68
-    else em += 0.56
+  let widest = 0
+  // A hard-broken label is as wide as its widest line, never the sum of its lines.
+  for (const line of text.split(LINE_BREAK)) {
+    let em = 0
+    for (const char of line) {
+      const code = char.codePointAt(0) as number
+      if (isWide(code)) em += 1
+      else if (NARROW.has(char)) em += 0.32
+      else if (WIDE.has(char)) em += 0.86
+      else if (char >= '0' && char <= '9') em += 0.58
+      else if (char >= 'A' && char <= 'Z') em += 0.68
+      else em += 0.56
+    }
+    widest = Math.max(widest, em)
   }
-  return em * size * bold
+  return widest * size * bold
 }
 
 function fits(text: string, width: number, size: number, weight: number): boolean {
@@ -52,6 +60,15 @@ const NO_LINE_START = /^[，。、：；！？）」』》】〉…,.:;!?)\]}%]/
 
 /** Greedy wrap into at most `maxLines` lines no wider than `width`; the last line is ellipsized. */
 export function wrap(text: string, width: number, size: number, weight = 400, maxLines = 3): string[] {
+  // An explicit line break is a promise, not a hint: never re-flow across one.
+  const lines = text.split(LINE_BREAK).flatMap(paragraph => wrapParagraph(paragraph, width, size, weight))
+  if (lines.length === 0) return ['']
+  const shown = lines.slice(0, maxLines).map(line => ellipsize(line, width, size, weight))
+  if (lines.length > maxLines) shown[maxLines - 1] = ellipsize(`${shown[maxLines - 1] as string}…`, width, size, weight)
+  return shown
+}
+
+function wrapParagraph(text: string, width: number, size: number, weight: number): string[] {
   const raw = text.match(/[\u2e80-\u9fff\uac00-\ud7a3\uff00-\uffef]|[^\s\u2e80-\u9fff\uac00-\ud7a3\uff00-\uffef]+\s*|\s+/g) ?? []
   // Closing punctuation must not start a line: glue it to the character before it.
   const tokens: string[] = []
@@ -77,10 +94,7 @@ export function wrap(text: string, width: number, size: number, weight = 400, ma
     current = token.trimStart()
   }
   if (current.trim() !== '') lines.push(current.trimEnd())
-  if (lines.length === 0) return ['']
-  const shown = lines.slice(0, maxLines).map(line => ellipsize(line, width, size, weight))
-  if (lines.length > maxLines) shown[maxLines - 1] = ellipsize(`${shown[maxLines - 1] as string}…`, width, size, weight)
-  return shown
+  return lines.length === 0 ? [''] : lines
 }
 
 /** Round up to a "nice" axis step (1, 2, 2.5, 5 × 10^k). */
