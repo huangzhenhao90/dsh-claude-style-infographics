@@ -1,24 +1,4 @@
-import { type StyleName, DEFAULT_STYLE, STYLES } from './palettes.ts'
-
-export const FREQUENCIES = ['high', 'medium', 'low'] as const
-export type Frequency = (typeof FREQUENCIES)[number]
-export const DEFAULT_FREQUENCY: Frequency = 'medium'
-
-export interface InfographicConfig {
-  frequency: Frequency
-  defaultStyle: StyleName
-}
-
-export const DEFAULT_CONFIG: InfographicConfig = {
-  frequency: DEFAULT_FREQUENCY,
-  defaultStyle: DEFAULT_STYLE,
-}
-
-export const CONFIG_STORAGE_KEY = 'dsh-infographic:config'
-
-export function isFrequency(value: unknown): value is Frequency {
-  return typeof value === 'string' && (FREQUENCIES as readonly string[]).includes(value)
-}
+import { DEFAULT_FREQUENCY, DEFAULT_STYLE, FREQUENCIES, STYLES, type Frequency, type StyleName } from './types.js'
 
 /** Generate dynamic system prompt section text based on frequency and default style. */
 export function buildPromptSection(frequency: Frequency, defaultStyle: StyleName): string {
@@ -26,7 +6,7 @@ export function buildPromptSection(frequency: Frequency, defaultStyle: StyleName
   switch (frequency) {
     case 'high':
       policy =
-        '视觉优先（积极模式）：只要回答涉及业务流程、步骤流转、系统分层架构、数据量化对比、周期走势、里程碑或市场份额，优先绘制信息图，用图表主导回答，正文仅作简明结论。'
+        '视觉优先（积极模式）：默认每一条实质性回答都要配至少一张信息图，不要等用户提醒。只要回答涉及业务流程、步骤流转、系统分层架构、数据量化对比、周期走势、里程碑、市场份额、分类枚举、多类要点并列、事件梳理或结论汇总，就必须绘制信息图，用图表主导回答，正文仅作简明结论。判断标准从宽：宁可多画一张，也不要漏画；只有纯寒暄、单一事实确认或完全无法结构化的闲谈才可以不配图。若内容超过一张图能讲清的范围，拆成多张（每张只讲一个问题），而不是省掉不画。'
       break
     case 'low':
       policy =
@@ -52,4 +32,8 @@ export function buildPromptSection(frequency: Frequency, defaultStyle: StyleName
 - Optional on every kind: title, subtitle, note (data source / unit / "sample data"), style (${STYLES.join(' | ')} — 默认已为 ${defaultStyle}）。Colours are names only: purple teal coral pink gray blue green amber red.
 - Write the fence in the answer body, never in reasoning. Write all visible text in the user's language. Do not repeat the chart's content in prose. Never invent numbers; mark illustrative data in note.
 - Load the \`infographic\` skill for the full field reference and examples before your first use in a session.`
+}
+
+export function isFrequency(value: unknown): value is Frequency {
+  return typeof value === 'string' && (FREQUENCIES as readonly string[]).includes(value)
 }
